@@ -15,7 +15,7 @@ GM.Credits = {
 	{"credit_dozet_community", "https://github.com/Toy323/dozet-bandit-zs", "credit_dozet_community_desc"},
 	{"credit_github", "", "credit_github_desc"}
 }
-
+USE_NEW_MELEE_BASE = true
 include("nixthelag.lua")
 include("buffthefps.lua")
 GM.SpecialWave = ""
@@ -52,7 +52,42 @@ include("obj_weapon_extend.lua")
 include("sh_stamina.lua")
 
 include("workshopfix.lua")
+function include_library(folder)
+	local GM = GM or GAMEMODE
 
+	-- Assume files in the base directory are included merely for existing.
+	local files, _ = file.Find(GM.FolderName.."/gamemode/"..folder.."/*.lua", "LUA")
+	table.sort(files)
+	for _, filename in ipairs(files) do
+		include(folder.."/"..filename)
+	end
+
+	if SERVER then
+		local server_files, _ = file.Find(GM.FolderName.."/gamemode/"..folder.."/server/*.lua", "LUA")
+		table.sort(server_files)
+
+		for _, filename in ipairs(server_files) do
+			include(folder.."/server/"..filename)
+		end
+	end
+
+	local client_files, _ = file.Find(GM.FolderName.."/gamemode/"..folder.."/client/*.lua", "LUA")
+	table.sort(client_files)
+	local clientmethod = CLIENT and include or AddCSLuaFile
+	for _, filename in ipairs(client_files) do
+		clientmethod(folder.."/client/"..filename)
+	end
+
+	local shared_files, _ = file.Find(GM.FolderName.."/gamemode/"..folder.."/shared/*.lua", "LUA")
+	table.sort(shared_files)
+	for _, filename in ipairs(shared_files) do
+		include(folder.."/shared/"..filename)
+		if SERVER then
+			AddCSLuaFile(folder.."/shared/"..filename)
+		end
+	end
+end
+include_library("player_movement")
 ----------------------
 
 GM.EndRound = false
@@ -215,7 +250,12 @@ function GM:OnPlayerHitGround(pl, inwater, hitfloater, speed)
 	local damage = math.max(0,0.165*(speed-512))
 	damage = damage * mul
 	if hitfloater then damage = damage / 2 end
-	if self:GetSpecialWave() == "bhop" then return end
+	if self:GetSpecialWave() == "bhop" then 
+			local vector = pl:GetAimVector()
+			vector.z = math.max(5, pl:GetAimVector().z)
+			pl:SetVelocity(Vector(0,0,130) + (vector+Vector(0,0,10))*15 + pl:GetAimVector()*50)
+		return true
+	end
 	if math.floor(damage) > 0 then
 		pl:SetVelocity(- pl:GetVelocity() / 4)
 		if SERVER then
@@ -254,9 +294,9 @@ end
 function GM:ScalePlayerDamage(pl, hitgroup, dmginfo)
 	local attacker = dmginfo:GetAttacker()
 	local isproj = (dmginfo:GetInflictor() and IsValid(dmginfo:GetInflictor()) and dmginfo:GetInflictor().m_IsProjectile)
-	local attackweapon = dmginfo:GetAttacker():GetActiveWeapon()
+	local attackweapon =  dmginfo:GetAttacker().GetActiveWeapon and dmginfo:GetAttacker():GetActiveWeapon()
 	local headshot = hitgroup == HITGROUP_HEAD
-	if attackweapon.IgnoreDamageScaling then return end
+	if attackweapon and attackweapon.IgnoreDamageScaling then return end
 	if headshot and dmginfo:IsBulletDamage() and SERVER then
 		pl:SetWasHitInHead()
 	end

@@ -223,12 +223,16 @@ function meta:ChangeTeam(teamid)
 end
 
 function meta:ProcessDamage(dmginfo)
-	local attacker, inflictor = dmginfo:GetAttacker(), dmginfo:GetInflictor()
+	local attacker, inflictor = dmginfo:GetAttacker(), dmginfo:GetInflictor() 
 	local attackweapon = (attacker:IsPlayer() and attacker:GetActiveWeapon() or nil)
 	local lasthitgroup = self:LastHitGroup()
-	if self:IsSkillActive(SKILL_2_LIFE) and attacker:IsPlayer() and !attacker:IsSkillActive(SKILL_2_LIFE) or self:IsSkillActive(SKILL_2_LIFE) and !attacker:IsPlayer() then
+	if self:IsSkillActive(SKILL_2_LIFE) and (attacker:IsPlayer() and !attacker:IsSkillActive(SKILL_2_LIFE) or !attacker:IsPlayer()) then
 		if attacker:IsPlayer() and attacker:GetActiveWeapon().IsMelee then
 			attacker:SetBloodArmor(math.min(100, attacker:GetBloodArmor() + dmginfo:GetDamage() * 0.25))
+		end
+		local user = self:GetStandUser()
+		if user:IsSkillActive(SKILL_CHIP_CQ) then
+			user:TakeDamage(3,attacker,inflictor)
 		end
 		dmginfo:ScaleDamage(0.5)
 	end
@@ -240,11 +244,15 @@ function meta:ProcessDamage(dmginfo)
 				net.WriteBool( head )
 			net.Send( attacker )
 		end
-		if attacker:IsSkillActive(SKILL_2_LIFE) and attacker:GetStandUser():IsValid() and GAMEMODE:GetSpecialWave() ~= "1hp" then
-			dmginfo:ScaleDamage(attacker:GetStandUser():Health()/attacker:GetStandUser():GetMaxHealth())
+		local owner = attacker:GetStandUser()
+		if attacker:IsSkillActive(SKILL_2_LIFE) and owner:IsValid() then
+			if  GAMEMODE:GetSpecialWave() ~= "1hp" then
+				dmginfo:ScaleDamage(owner:Health()/owner:GetMaxHealth())
+			end
 		end
+		
 		if attacker:LessPlayersOnTeam() and attackweapon and not attackweapon.NoScaleToLessPlayers and not attackweapon.IgnoreDamageScaling then
-			dmginfo:ScaleDamage(1.25)
+			dmginfo:ScaleDamage(1.15)
 		end
 		if self:IsSkillActive(SKILL_ULTRADEFENCE) then
 			dmginfo:ScaleDamage(0.75)
@@ -254,6 +262,9 @@ function meta:ProcessDamage(dmginfo)
 		end
 		if attacker:IsSkillActive(SKILL_NFV) and attacker.StaminaRun > CurTime() then 
 			dmginfo:ScaleDamage(1.25)
+		end
+		if attacker:GetDOAMan() then
+			dmginfo:ScaleDamage(1.75)
 		end
 		if attacker:IsSkillActive(SKILL_DEEPFOCUS) and attacker.DeepFocuses then
 			dmginfo:ScaleDamage(0)
@@ -269,6 +280,9 @@ function meta:ProcessDamage(dmginfo)
 		if self:IsSkillActive(SKILL_DAMN_BRO) and math.random(1,6) == 1 and !inflictor.m_IsProjectile then
 			dmginfo:ScaleDamage(2.5)
 		end
+		if (self:IsSkillActive(SKILL_B_AND_B) or attacker:IsSkillActive(SKILL_B_AND_B)) and (bit.band(dmginfo:GetDamageType(), DMG_ALWAYSGIB) ~= 0 or bit.band(dmginfo:GetDamageType(), DMG_BLAST) ~= 0 ) then
+			dmginfo:ScaleDamage(1.5)
+		end
 		if self:GetBodyArmor() and self:GetBodyArmor() > 0 and attacker:Team() ~= self:Team() then
 			local ratio = 0.75
 			if dmginfo:IsDamageType(DMG_BLAST) then
@@ -279,35 +293,39 @@ function meta:ProcessDamage(dmginfo)
 				ratio = ratio * 0.6
 				dmginfo:ScaleDamage(0.4)
 			end
-			self:AddBodyArmor(dmginfo:GetDamage()*-ratio)
+			self:AddBodyArmor(dmginfo:GetDamage()-ratio)
 		end
 		if self:GetActiveWeapon() and IsValid(self:GetActiveWeapon()) and self:GetActiveWeapon().ProcessDamage then
 			self:GetActiveWeapon():ProcessDamage(dmginfo)
+		end
+		if inflictor and IsValid(inflictor) and inflictor.DamageThink then
+			inflictor:DamageThink(dmginfo, self)
 		end
 		if self:GetBloodArmor() > 0 and GAMEMODE:GetSpecialWave() ~= "1hp" and attacker:Team() ~= self:Team()  then
 			local damage = dmginfo:GetDamage()
 			if damage > 0 then
 	
-				local ratio = 0.5
+				local ratio = 0.3
 				local absorb = math.min(self:GetBloodArmor(), damage* ratio)
 				dmginfo:SetDamage(damage - absorb)
 				GAMEMODE:DamageFloater(attacker, self, dmginfo , true, absorb)
 				self:SetBloodArmor(self:GetBloodArmor() - absorb)
 				if (attackweapon and attackweapon.IgnoreDamageScaling)then
-					self:SetBloodArmor(self:GetBloodArmor() + (absorb * 0.5))
+					self:SetBloodArmor(self:GetBloodArmor() + (absorb * 0.3))
 				end
 	
 	
-				if damage > 20 and damage - absorb <= 0 then
+				if damage > 50 and damage - absorb <= 0 then
 					self:EmitSound("physics/flesh/flesh_strider_impact_bullet3.wav", 55)
 				end
 
 			end
 			
 		end
-		if attacker:GetActiveWeapon().IsMelee then
-			attacker:SetBloodArmor(math.min(100, attacker:GetBloodArmor() + dmginfo:GetDamage() * 0.25))
-		end
+        if attacker:GetActiveWeapon().IsMelee then
+            if attacker:GetBodyArmor() > 0 then attacker:SetBodyArmor(math.Clamp(attacker:GetBodyArmor()-attacker:GetBloodArmor(),0,100))
+            else attacker:SetBloodArmor(math.min(100, attacker:GetBloodArmor() + dmginfo:GetDamage() * 0.25)) end
+        end
 		if GAMEMODE:GetSpecialWave() == "aos" then
 			dmginfo:ScaleDamage(0.5)
 		end
@@ -854,6 +872,7 @@ end
 
 function meta:AddPoints(points)
 	--self:AddFrags(points)
+	points = math.max(points,0)
 	self:AddZSXP(points * 3)
 	self:SetPoints(self:GetPoints() + points)
 	self:SetFullPoints(self:GetFullPoints() + points)

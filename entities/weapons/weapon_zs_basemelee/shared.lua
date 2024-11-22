@@ -73,6 +73,7 @@ function SWEP:SetupDataTables()
 	self:NetworkVar("Bool", 21, "Block")
 	self:NetworkVar("Bool", 22, "ChargeBlock")
 	self:NetworkVar("Float", 23, "GetAttackCharge")
+	self:NetworkVar("Float", 24, "ParryTime")
 end
 
 function SWEP:SetWeaponSwingHoldType(t)
@@ -105,8 +106,17 @@ function SWEP:Think()
 			self:SetBlock(false)
 			self:SetHoldType(self.HoldType)
 			self:SetWeaponSwingHoldType(self.SwingHoldType)
-			self:SetChargeBlock(false) 
+			self:SetChargeBlock(false)
+			self:SetParryTime(0)  
+			self.UsedParry = false
 		end
+	end
+	if self:GetParryTime() > CurTime() and SERVER and !self.UsedParry then
+		local owner = self:GetOwner()
+		local parry = owner:GiveStatus("parry_state")
+		parry:SetTime(0.6+(owner:IsSkillActive(SKILL_PARRY_SLOW) and 0.3 or 0))
+		self:SetParryTime(0)
+		self.UsedParry = true
 	end
 
 	--[[if CLIENT then
@@ -115,9 +125,10 @@ function SWEP:Think()
 end
 function SWEP:Move(mv)
 	if self:GetBlock() and mv:KeyDown(IN_ATTACK2) and not self:GetOwner():GetBarricadeGhosting() then
-		mv:SetMaxSpeed(self.WalkSpeed*(self.SpeedInBlock or 0.45))
-		mv:SetMaxClientSpeed(self.WalkSpeed*(self.SpeedInBlock or 0.45))	
-		mv:SetSideSpeed(mv:GetSideSpeed()*(self.SpeedInBlock or 0.45))
+		local owner3 = self:GetOwner():IsSkillActive(SKILL_TANKIST)
+		mv:SetMaxSpeed(self.WalkSpeed*(self.SpeedInBlock or 0.45)*(owner3 and 0.5 or 1))
+		mv:SetMaxClientSpeed(self.WalkSpeed*(self.SpeedInBlock or 0.45)*(owner3 and 0.5 or 1))	
+		mv:SetSideSpeed(mv:GetSideSpeed()*(self.SpeedInBlock or 0.45)*(owner3 and 0.5 or 1))
 	end
 end
 function SWEP:ProcessDamage(dmginfo)
@@ -125,19 +136,20 @@ function SWEP:ProcessDamage(dmginfo)
 	local owner = self:GetOwner()
 	local attackweapon = (attacker:IsPlayer() and attacker:GetActiveWeapon() or nil)
 	if attacker:IsPlayer() then
-		if attacker:GetStamina() <= 50 then
+		if attacker:GetStamina() <= 45 then
 			dmginfo:ScaleDamage(attacker:GetStamina()/100)
 		end
-		if self:GetBlock() then
-			if dmginfo:IsDamageType(DMG_BULLET) and not (attackweapon and attackweapon.IgnoreDamageScaling) then
-				dmginfo:ScaleDamage(self.BlockVsBullet)
+		if self:GetBlock() and not (inflictor and inflictor.IgnoreDamageScaling or attackweapon and attackweapon.IgnoreDamageScaling) then
+			local owner3 = owner:IsSkillActive(SKILL_TANKIST)
+			if dmginfo:IsDamageType(DMG_BULLET)  then
+				dmginfo:ScaleDamage(self.BlockVsBullet*(owner3 and 0 or 1))
 			end
 			if dmginfo:IsDamageType(DMG_CRUSH) or dmginfo:IsDamageType(DMG_SLASH) then
-				dmginfo:ScaleDamage(self.BlockVsMelee)
+				dmginfo:ScaleDamage(self.BlockVsMelee*(owner3 and 0 or 1))
 			end
 			if dmginfo:IsDamageType(DMG_DISSOLVE) then
 				attacker:TakeDamage(dmginfo:GetDamage() * self.BlockVsDissolve)
-				dmginfo:ScaleDamage(self.BlockVsDissolve)
+				dmginfo:ScaleDamage(self.BlockVsDissolve*(owner3 and 0 or 1))
 			end
 			local center = owner:LocalToWorld(owner:OBBCenter())
 			local hitpos = owner:NearestPoint(dmginfo:GetDamagePosition())
@@ -152,7 +164,6 @@ function SWEP:ProcessDamage(dmginfo)
 			dmginfo:ScaleDamage(0)
 		end
 	end
-	
 end
 
 function SWEP:SecondaryAttack()
@@ -162,6 +173,12 @@ function SWEP:SecondaryAttack()
 			self:SetHoldType("revolver")
 			self:SetWeaponSwingHoldType("revolver")
 			self:SetChargeBlock(true) 
+			local owner = self:GetOwner()
+			if owner:IsSkillActive(SKILL_PARRY_SLOW) then
+				self:SetNextSecondaryFire(CurTime()+0.7)
+			end
+			if owner:KeyDown(IN_RELOAD) then return end
+			self:SetParryTime(CurTime()+0.1)
 		end
 	end
 end
@@ -224,8 +241,10 @@ end
 
 function SWEP:MeleeSwing()
 	local owner = self:GetOwner()
-	local formula = -(self.Stamina or 10)*((self:GetBlock() and 2 or 1)*(owner:GetVelocity():LengthSqr() <= 15600 and 0.65 or 1))
-	self:GetOwner():AddStamina(formula)
+	if !self.NoUseStamina then
+		local formula = -(self.Stamina or 10)*((self:GetBlock() and 2 or 1)*(owner:GetVelocity():LengthSqr() <= 15600 and 0.65 or 1))*(owner:IsSkillActive(SKILL_S_ANUBIS) and  math.max(0.2,1-(GAMEMODE:GetWave() * 0.06)) or 1 )
+		timer.Simple(0, function() owner:AddStamina(formula) end)
+	end
 	--print(formula)
 	owner:DoAttackEvent()
 	local tr = owner:CompensatedMeleeTrace(self.MeleeRange, self.MeleeSize)
@@ -242,9 +261,9 @@ function SWEP:MeleeSwing()
 		return
 	end
 
-	local damagemultiplier = (owner.MeleeDamageMultiplier or 1) * (self:GetOwner():IsSkillActive(SKILL_S_ANUBIS) and (GAMEMODE:GetWave() * (self:GetOwner():IsSkillActive(SKILL_S_ANUBIS_B1) and 0.06 or 0.03) + 0.6) or 1)
+	local damagemultiplier = (owner.MeleeDamageMultiplier or 1) * (owner:IsSkillActive(SKILL_S_ANUBIS) and (GAMEMODE:GetWave() * (owner:IsSkillActive(SKILL_S_ANUBIS_B1) and 0.06 or 0.03) + 0.6) or 1)
 	local damage = ((self:GetBlock() and self.MeleeDamage * (self.DamageMulBlock or 0.4) or self.MeleeDamage) * damagemultiplier )
-	if owner:GetStamina() >= 99 then
+	if owner:GetStamina() >= 99 and damage < 40 then
 		damage = damage * 1.35
 	end
 	local hitent = tr.Entity
@@ -283,6 +302,7 @@ function SWEP:MeleeSwing()
 	end
 
 	self:MeleeHitEntity(tr, hitent, damagemultiplier)
+	
 
 	if self.PostOnMeleeHit then self:PostOnMeleeHit(hitent, hitflesh, tr) end
 end
@@ -300,7 +320,9 @@ function SWEP:MeleeHitEntity(tr, hitent, damagemultiplier)
 	dmginfo:SetDamageType(self.DamageType)
 	dmginfo:SetDamage(damage)
 	dmginfo:SetDamageForce(math.min(self.MeleeDamage, 50) * 50 * owner:GetAimVector())
-	owner:AddStamina(-(self.Stamina or 20) * 0.3)
+	if !self.NoUseStamina then
+		timer.Simple(0, function() owner:AddStamina(-(self.Stamina or 20) * 0.3) end)
+	end
 
 	local vel
 	if hitent:IsPlayer() then
@@ -335,8 +357,8 @@ function SWEP:PostHitUtil(owner, hitent, dmginfo, tr, vel)
 	-- Perform our own knockback vs. players
 	if hitent:IsPlayer() then
 		local knockback = self.MeleeKnockBack
-		if knockback > 0 then
-			hitent:ThrowFromPositionSetZ(tr.StartPos, knockback, nil, true)
+		if knockback > 0 or owner:IsSkillActive(SKILL_WHEE_WHEE) then
+			hitent:ThrowFromPositionSetZ(tr.StartPos, knockback + (owner:IsSkillActive(SKILL_WHEE_WHEE) and 900 or 1), nil, true)
 		end
 	end
 

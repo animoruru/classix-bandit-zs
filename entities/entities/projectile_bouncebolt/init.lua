@@ -63,7 +63,7 @@ function ENT:Think()
 	if self.Touched and not self.Damaged and self.HittedLastTime <= CurTime() then
 		self.HittedLastTime = CurTime() + 0.6
 		local damage = (self.Damage or 55)
-		local processed_dmg = math.floor((self.Damage or 25) * 1.5^(self.Bounces - (self:GetHitTime() + 0.3 > CurTime() and 1 or 0)))
+		local processed_dmg = math.floor((self.Damage or 25) + 15)
 		self.Damaged = true
 		local ent = self.Touched.Entity
 		if (ent and ent:IsValid() and ent:IsPlayer() and self:GetOwner() and self:GetOwner():IsPlayer() and self:GetOwner():Team() ~= ent:Team()) then

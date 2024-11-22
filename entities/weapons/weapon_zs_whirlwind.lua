@@ -109,7 +109,7 @@ function SWEP:Attack(proj)
 		if SERVER then
 			local aimvec = owner:GetAimVector()
 			local phys = proj:GetPhysicsObject()
-			if phys:IsValid() then
+			if phys:IsValid() and !proj.NoWhirlWhind then
 				phys:SetVelocity(phys:GetVelocity()*0.25)
 				local dir = (aimvec*steeringratio+firevec*(1-steeringratio))
 				phys:AddVelocity(dir*2200)

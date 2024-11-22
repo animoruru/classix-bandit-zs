@@ -123,7 +123,7 @@ function GM:_PostDrawOpaqueRenderables()
 			local plys = team.GetPlayers(MySelf:Team())
 			for _, pl in pairs(plys) do
 				local dist = pl:GetPos():DistToSqr(eyepos)
-				if pl:Alive() and dist <= 16777216 and pl ~= MySelf then
+				if pl:Alive() and dist <= 16777216 and pl ~= MySelf  and self:GetSpecialWave() ~= "urmteam" then
 					local healthfrac = math_max(pl:Health(), 0) / pl:GetMaxHealth()
 					colHealth.r = math_Approach(colHealthEmpty.r, colHealthFull.r, math_abs(colHealthEmpty.r - colHealthFull.r) * healthfrac)
 					colHealth.g = math_Approach(colHealthEmpty.g, colHealthFull.g, math_abs(colHealthEmpty.g - colHealthFull.g) * healthfrac)
@@ -152,7 +152,7 @@ function GM:_PostDrawOpaqueRenderables()
 		end
 end
 function GM:DrawNearestEnemy()
-	if !MySelf:IsSkillActive(SKILL_AUTOSCAN) or not self.Auras then return end
+	if !MySelf:IsSkillActive(SKILL_AUTOSCAN) or not self.Auras or MySelf:IsSkillActive(SKILL_FOLGA) or self:GetSpecialWave() == "urmteam" then return end
 
 	local eyepos = EyePos()
 	local range, dist, healthfrac, pos, size
@@ -160,7 +160,7 @@ function GM:DrawNearestEnemy()
 	for _, pl in pairs(team_GetPlayers(myteam)) do
 		range = 196028
 		dist = pl:GetPos():DistToSqr(eyepos)
-		if pl:Alive() and dist <= range then
+		if pl:Alive() and dist <= range and !pl:GetFocusD() and !pl:GetActiveWeapon().m_IsStealthWeapon  then
 			healthfrac = math_max(pl:Health(), 0) / pl:GetMaxHealth()
 			colHealth.r = math_Approach(colHealthEmpty.r, colHealthFull.r, math_abs(colHealthEmpty.r - colHealthFull.r) * healthfrac)
 			colHealth.g = math_Approach(colHealthEmpty.g, colHealthFull.g, math_abs(colHealthEmpty.g - colHealthFull.g) * healthfrac)

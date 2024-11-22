@@ -34,7 +34,7 @@ SWEP.MeleeKnockBack = 0
 SWEP.DefaultMeleeKnockBack = 0
 SWEP.UseMelee1 = true
 
-SWEP.Stamina = 12
+SWEP.Stamina = 34
 
 SWEP.HitGesture = ACT_HL2MP_GESTURE_RANGE_ATTACK_MELEE
 SWEP.MissGesture = SWEP.HitGesture
@@ -83,6 +83,9 @@ function SWEP:PlayHitSound()
 end
 
 function SWEP:Move(mv)
+	if self.BaseClass.Move then
+		self.BaseClass.Move(self,mv)
+	end
 	if self:GetIsCharging() and self:GetChargePerc() >= 1 and mv:KeyDown(IN_ATTACK2) and not self:GetOwner():GetBarricadeGhosting() then
 		mv:SetMaxSpeed(self.WalkSpeed*0.25)
 		mv:SetMaxClientSpeed(self.WalkSpeed*0.25)	

@@ -9,6 +9,12 @@ function ENT:Initialize()
 	self.ShootingSound = CreateSound(self, "npc/combine_gunship/gunship_weapon_fire_loop6.wav")
 
 	local size = self.SearchDistance + 32
+	self.TimeOfSpawn = CurTime() + 5
+	self:AddCallback("SetUpgrade", function(self)
+		if self:GetUpgrade() >= 4 then
+			self.TimeOfSpawn = CurTime() + 11
+		end
+	end)
 	local nsize = -size
 	self:SetRenderBounds(Vector(nsize, nsize, nsize * 0.25), Vector(size, size, size * 0.25))
 end
@@ -45,6 +51,13 @@ local cam_End3D2D = cam.End3D2D
 local smokegravity = Vector(0, 0, 200)
 local aScreen = Angle(0, 270, 60)
 local vScreen = Vector(0, -2, 45)
+local Colors = {
+Color(156,156,156),
+Color(94,23,23),
+Color(0,94,5),
+Color(0,7,112),
+Color(218,149,0)
+}
 function ENT:Draw()
 	self:CalculatePoseAngles()
 	self:SetPoseParameter("aim_yaw", self.PoseYaw)
@@ -111,6 +124,7 @@ function ENT:Draw()
 		if flash and self:GetManualControl() then
 			draw_SimpleText(translate.Get("manual_control"), "DefaultFont", x, 40, COLOR_YELLOW, TEXT_ALIGN_CENTER)
 		end
+		draw_SimpleText("УЛУЧШЕНИЙ: "..self:GetUpgrade(), "DefaultFontBold", x, 68, Colors[self:GetUpgrade()], TEXT_ALIGN_CENTER)
 		
 		if ammo > 0 then
 			draw_SimpleText("["..ammo.." / "..self.MaxAmmo.."]", "DefaultFontBold", x, 55, COLOR_WHITE, TEXT_ALIGN_CENTER)
@@ -122,6 +136,7 @@ end
 
 local matBeam = Material("trails/laser")
 local matGlow = Material("sprites/glow04_noz")
+local colAlpha, colAlpha2 = Color( 0, 197, 197, 45), Color( 255, 255, 255, 72) 
 function ENT:DrawTranslucent()
 	if self:GetMaterial() ~= "" then return end
 
@@ -167,4 +182,21 @@ function ENT:DrawTranslucent()
 	render.SetMaterial(matGlow)
 	render.DrawSprite(lightpos, 4, 4, COLOR_WHITE)
 	render.DrawSprite(lightpos, 16, 16, colBeam)
+	if self:GetUpgrade() < 5 or !WorldVisible(self:GetPos(), MySelf:EyePos()) then return end
+	render.SetColorMaterial()
+	local pos = self:GetUp()*30 + self:GetPos()
+	
+	local radius = math.min(40, 40*(self:GetShieldDamage()/self.MaxShieldCapacity))
+	local wideSteps = 15
+	local tallSteps = 15
+	
+	render.DrawSphere( pos, radius, wideSteps, tallSteps, colAlpha)
+	
+	render.DrawWireframeSphere( pos, radius, wideSteps, tallSteps, colAlpha2 )
 end
+net.Receive("zs_bounty_open", function(length)
+	local tables = net.ReadTable()
+	local ent = net.ReadEntity()
+
+	GAMEMODE:OpenBounty(tables,ent)	
+end)

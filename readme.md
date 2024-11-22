@@ -1,5 +1,7 @@
 # ZS:BANDIT WARFARE
 
+# IP Of this ZS:BW Version - 95.189.107.222:27016
+
 Mod by  Jooho 'air rice' Lee
 ### Additional credits:
 | Contribution | Author |
@@ -10,7 +12,7 @@ Mod by  Jooho 'air rice' Lee
 | Board Kit model |  Samuel (samuel_games@hotmail.com) |
 | Original Korean Translation |  Honsal |
 | Additional Code Snippets	  | Sunrust Community (Benjy, The Darker One, Raox, Scott), Original Git Repo, Honsal |
-| Some weapons + skills and block for melee	  | D-Z Toy |
+| Modify this BW:ZS   | D-Z Toy |
 | Translators | [Link to Translators](translation_credits.md) |
 ### Story (If you're into that kind of thing...)
 The devastating Zombie outbreaks, which led to hulking beasts and otherworldly monsters threatening mankind, has been put to rest. Whether by tenacity or pure miracle, the humans have survived to see another day
@@ -37,3 +39,28 @@ The gamemode has been built with the ideology that the #1 issue with most Garry'
  - Supplement your arsenal with various tools that can turn the tide of battle, from handheld interceptors that reflect back enemy projectiles to EMP guns that can halt enemy transmission progress.
 
 Visit the [related wiki pages](https://github.com/AirRice/zs_banditwarfare/wiki) for more information on specific subjects. 
+
+### Modified Version Features
+ - Skills from NoxZS
+    - Adds more unique mechanics
+    - Alternative version of weapons!(Like for a whirlwind)
+    - S T A N D S (Y'e I know this is cringe🤓)
+ - Block for melee
+    - Just reduce taken damage
+    - But pulse damage comeback to attacker!
+ - Parry for melee
+    - Melee Can parry melee,bullets,projectiles and... explosions(bruh)
+    - You can disable parry while holding Reload button
+ - More weapons!
+
+(Also this gamemode need this content for stable work [content](https://steamcommunity.com/sharedfiles/filedetails/?id=2796212380))
+
+
+
+
+
+
+
+
+
+(мне лень делать перевод на инлиш,так что помогите если хотите☠️)

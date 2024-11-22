@@ -252,6 +252,10 @@ function GM:AddNetworkStrings()
 	util.AddNetworkString("zs_waveend")
 	util.AddNetworkString("zs_suddendeath")
 
+	util.AddNetworkString("zs_fix_spec")
+
+	
+
 	util.AddNetworkString("zs_skills_active")
 	util.AddNetworkString("zs_skills_unlocked")
 	util.AddNetworkString("zs_skills_desired")
@@ -260,6 +264,8 @@ function GM:AddNetworkStrings()
 	util.AddNetworkString("zs_skills_all_desired")
 	util.AddNetworkString("zs_skill_set_desired")
 	util.AddNetworkString("zs_secret")
+	
+	util.AddNetworkString("zs_stand_become")
 	util.AddNetworkString("zs_skills_init")
 	util.AddNetworkString("zs_skills_reset")
 	util.AddNetworkString("zs_skills_remort")
@@ -292,6 +298,8 @@ function GM:AddNetworkStrings()
 	util.AddNetworkString("zs_honmention")
 	util.AddNetworkString("zs_floatscore")
 	util.AddNetworkString("zs_floatscore_vec")
+	util.AddNetworkString("zs_skill_is_destroyed")
+
 
 	util.AddNetworkString("zs_insure_weapon")
 	util.AddNetworkString("zs_remove_insured_weapon")
@@ -312,6 +320,15 @@ function GM:AddNetworkStrings()
 	util.AddNetworkString("zs_pls_kill_pl")
 	util.AddNetworkString("zs_pl_kill_self")
 	util.AddNetworkString("zs_death")
+
+	util.AddNetworkString("zs_bounty_add")
+	
+	util.AddNetworkString("zs_hah")
+
+	util.AddNetworkString("zs_bounty_open")
+
+	
+	util.AddNetworkString("zs_ability_weapon")
 	
 	util.AddNetworkString("bw_fire")
 end
@@ -791,78 +808,69 @@ function GM:Think()
 			pl:BarricadeGhostingThink()
 		end
 		if pl:Alive() then
-			if pl:IsSkillActive(SKILL_GENERATOR) and pl.BloodRegen <=  CurTime() then
-				pl.BloodRegen = CurTime() + 5
-				pl:SetBloodArmor(math.min(100,pl:GetBloodArmor() + 3))
-			end
-			if pl:IsSkillActive(SKILL_STARDUST) and pl.Think_Stardust <= CurTime() then
-				pl.Think_Stardust = CurTime() + 3
-				pl:UpdateStarDust(pl:GetPos())
-			end
-			if pl:KeyDown(IN_SPEED) and pl:GetVelocity() ~= vector_origin and GAMEMODE:GetSpecialWave() ~= "old" then
-				if pl:GetStamina() > 0 then
-					pl:AddStamina(-0.32, true)
-				else
-					pl:ResetSpeed()
-				end
-			end
-
-			if pl.StaminaUsed <= CurTime() then
-				pl.StaminaUsed = CurTime() + 0.015 * pl:GetStamina()/25
+			if pl.StaminaUsed < time then
+				pl.StaminaUsed = time + 0.015 * pl:GetStamina()/40
 				pl:AddStamina(1)
 			end
-			if pl:IsSkillActive(SKILL_OPERATOR) and pl:GetVelocity():LengthSqr() >= 255 then
-				pl.NextUseManhack = CurTime() + 4
+			if pl:Team() == TEAM_SPECTATOR then
+				pl:Kill()--lol
 			end
-			if pl:IsSkillActive(SKILL_S_ANUBIS) and !pl:GetStatus("dimvision") then
-				pl:GiveStatus("dimvision",10)
+
+			if pl.ColdUsed < time then
+				pl.ColdUsed = time + 0.76
+				if pl:GetCold() > pl:GetMaximumCold() then
+					pl:Kill()
+					return
+				end
+				pl:AddCold(-1 * (self:GetSpecialWave() == "coldera" and -0.5 or 1))
 			end
-			if self:GetSpecialWave() == "anubis" then
-				pl:GiveStatus("dimvision",1)
+
+			
+			if self:GetSpecialWave() == "anubis" or pl:IsSkillActive(SKILL_S_ANUBIS)  then
+				pl:GiveStatus("dimvision",2)
 			end
-			if pl:IsSkillActive(SKILL_2_LIFE) and pl:GetStandUser():IsValid() and pl.FixForFix <= CurTime() then
-				local user = false
-				for _,ent in pairs(ents.FindInSphere(pl:GetPos(), 1028)) do 
-					if ent == pl:GetStandUser() then
-						user = true
+			if pl.FixForFix <= time and pl:IsSkillActive(SKILL_2_LIFE) then
+				if pl:GetStandUser():IsValid()  then
+
+					local user = false
+					local user3 = pl:GetStandUser()
+					for _,ent in pairs(ents.FindInSphere(pl:GetPos(), 1028)) do 
+						if ent == user3 then
+							user = true
+						end
 					end
+					if !user then
+						pl:SetPos(user3:GetPos())
+						pl:CenterNotify(translate.ClientGet(pl,"stand_dont_near"))
+					end
+					if !user3:Alive() then
+						timer.Create("Death STAND"..pl:Nick(),0.05,1, function() pl:Kill() end)
+						pl.FixForFix = time + 1
+					end
+					if user3:IsSkillActive(SKILL_CHIP_CQ) and user3:Alive() then
+						local percs = math.Round(math.Round(user3:Health()/user3:GetMaxHealth(),2)*pl:GetMaxHealth())
+						--print(percu)
+						--print(percs)	
+						--if percu < percs then
+						--	user3:SetHealth(percu)
+					--	else
+							pl:SetHealth(percs)
+					--	end
+					end
+					
+				elseif  !pl:GetStandUser():IsValid() and self:GetWaveActive() then
+					timer.Create("Death STAND WITHOUT USER"..pl:Nick(),0.05,1, function() pl:Kill() end)
+					pl.FixForFix = time + 1
 				end
-				if !user then
-					pl:SetPos(pl:GetStandUser():GetPos())
-					pl:CenterNotify(translate.ClientGet(pl,"stand_dont_near"))
-				end
-				if !pl:GetStandUser():Alive() then
-					pl.FixForFix = CurTime() + 1
-					timer.Create("Death STAND"..pl:Nick(),0.05,1, function() pl:Kill() end)
-				end
-			elseif  pl:IsSkillActive(SKILL_2_LIFE) and !pl:GetStandUser():IsValid() and pl.FixForFix <= CurTime() and self:GetWaveActive() then
-				pl.FixForFix = CurTime() + 1
-				timer.Create("Death STAND WITHOUT USER"..pl:Nick(),0.05,1, function() pl:Kill() end)
+			
 			end
 
 
-			if pl:IsSkillActive(SKILL_CRUSADER) then
-				for _, ent in pairs(ents.FindInSphere(pl:GetPos(), 128)) do
-					if ent ~= pl and ent:IsValid() and ent:IsPlayer() and ent:Team() == pl:Team() then
-						local buff = ent:GiveStatus("crusader_buff", 0.2)
-						buff.Applier = pl
-					end
-				end
-			end
-			if self:GetSpecialWave() == "bhop" and pl:OnGround() then
-				local vector = pl:GetAimVector()
-				vector.z = math.max(5, pl:GetAimVector().z)
-				pl:SetVelocity(Vector(0,0,130) + (vector+Vector(0,0,10))*15 + pl:GetAimVector()*50)
-			end
 			if pl:IsSkillActive(SKILL_VKID) and math.random(1,1500) == 1 then
 				local vector = pl:GetAimVector()
 				vector.z = math.max(50, pl:GetAimVector().z)
 				pl:SetVelocity(Vector(0,0,130) + (vector+Vector(0,0,15))*15 + pl:GetAimVector()*50)
 				timer.Simple(2, function() pl:SetVelocity(Vector(0,0,-1000)+pl:GetVelocity()) end)
-			end
-			if pl:IsSkillActive(SKILL_BAD_TIMES) and pl.BadTimeTime <= CurTime() and self:GetWaveActive() and self:GetSpecialWave() ~= "1hp" then
-				pl.BadTimeTime = CurTime() + 10
-				pl:TakeDamage(10, pl,pl:GetActiveWeapon())
 			end
 		end
 		if pl:IsSpectator() then
@@ -877,9 +885,12 @@ function GM:Think()
 				end
 			end
 			if numoutsidespawns >= #teamspawns then
-				pl:SetPos(teamspawns[ math.random(#teamspawns) ]:GetPos())
-				pl:SetAbsVelocity(Vector(0,0,0))
-				pl:CenterNotify(COLOR_RED, translate.ClientGet(pl, "before_wave_cant_go_outside_spawn"))
+				local validate = IsValid(teamspawns[ math.random(#teamspawns) ]) and teamspawns[ math.random(#teamspawns) ] or NULL 
+				if validate:IsValid() then
+					pl:SetPos(validate:GetPos())
+					pl:SetAbsVelocity(Vector(0,0,0))
+					pl:CenterNotify(COLOR_RED, translate.ClientGet(pl, "before_wave_cant_go_outside_spawn"))
+				end
 			end
 		end
 		if pl.m_PointQueue >= 1 and time >= pl.m_LastDamageDealt + 2 then
@@ -894,6 +905,59 @@ function GM:Think()
 			if pl:Alive() then
 				if pl:WaterLevel() >= 3 and not (pl.status_drown and pl.status_drown:IsValid()) then
 					pl:GiveStatus("drown")
+				end
+				if pl:KeyDown(IN_SPEED) and pl:GetVelocity() ~= vector_origin and GAMEMODE:GetSpecialWave() ~= "old" then
+					if pl:GetStamina() > 0 then
+						pl:AddStamina(-6, true)
+						pl:ResetSpeed()
+					end
+				end
+				if pl:IsSkillActive(SKILL_CRUSADER) then
+					for _, ent in pairs(ents.FindInSphere(pl:GetPos(), 128)) do
+						if ent ~= pl and ent:IsValid() and ent:IsPlayer() and ent:Team() == pl:Team() and ent:Alive() then
+							local buff = ent:GiveStatus("crusader_buff", 2)
+							buff.Applier = pl
+						end
+					end
+				end
+				if pl:IsSkillActive(SKILL_GENERATOR) and pl.BloodRegen <=  time then
+					pl.BloodRegen = time + 5
+					pl:SetBloodArmor(math.min(100,pl:GetBloodArmor() + 3))
+				end
+				if pl:IsSkillActive(SKILL_BAD_TIMES) and pl.BadTimeTime <= time and self:GetWaveActive() and self:GetSpecialWave() ~= "1hp" then
+					pl.BadTimeTime = time + 10
+					pl:TakeDamage(10, pl,pl:GetActiveWeapon())
+				end
+				if pl:IsSkillActive(SKILL_OPERATOR) and pl:GetVelocity():LengthSqr() >= 255 then
+					pl.NextUseManhack = time + 4
+				end
+				if pl:IsSkillActive(SKILL_STARDUST) and pl.Think_Stardust <= time then
+					pl:SetNWFloat("star_upd", time+ 3)
+					pl.Think_Stardust = time + 3
+					pl:UpdateStarDust(pl:GetPos())
+				end
+				if pl:IsSkillActive(SKILL_SHISHKA) and pl:GetBloodArmor() > 0 then
+					pl:SetBloodArmor(pl:GetBloodArmor() - 1)
+					pl:GiveStatus("shiska",1):AddTime(3)
+				end
+				if pl:IsSkillActive(SKILL_S_GE) and pl.NextGEUse < time then
+					pl.NextGEUse = time + 45
+					local geruse = {}
+					for k,v in pairs(player.GetAll()) do
+						if v ~= pl and v:IsValid() and v:Alive() then
+							geruse[#geruse+1] = v
+						end
+					end
+					if #geruse > 0 then
+						local whoheal = geruse[math.random(1,#geruse)]
+						whoheal:CenterNotify(COLOR_GREEN, "Вас вылечил ",pl)
+						if whoheal:Team() == pl:Team() then
+							pl:AddPoints(math.Clamp((whoheal:GetMaxHealth()-whoheal:Health())/15,0,30))
+						end
+						whoheal:SetHealth(whoheal:GetMaxHealth())
+						whoheal:SetBloodArmor(whoheal:GetBloodArmor() + 50)
+						pl:CenterNotify(COLOR_GREEN, "Вы вылечили ",whoheal)
+					end
 				end
 				pl:PreventSkyCade()
 			end
@@ -1104,7 +1168,7 @@ local function CheckBroken()
 		end
 	end
 end
-
+GM.MethUsed = {}
 function GM:DoRestartGame()
 	self.RoundEnded = nil
 
@@ -1117,6 +1181,7 @@ function GM:DoRestartGame()
 	end
 	self.CurrentMapLoadedPlayers = 0
 	self.ShuffledPlayersThisRound = false
+	self.MethUsed = {}
 
 	self:SetWave(0)
 	self:SetHumanScore(0)
@@ -1182,6 +1247,7 @@ end
 function GM:EndRound(winner)
 	if self.RoundEnded then return end
 	self:SaveAllVaults()
+	self.WeaponSaveLol = {}
 	self.RoundEnded = true
 	self.RoundEndedTime = CurTime()
 	ROUNDWINNER = winner
@@ -1302,9 +1368,8 @@ function GM:PlayerInitialSpawn(pl)
 	self:InitializeVault(pl)
 	gamemode.Call("PlayerInitialSpawnRound", pl)
 end
-
+GM.WeaponSaveLol = {}
 function GM:PlayerInitialSpawnRound(pl)
-	pl:SprintDisable()
 	--pl:RemoveSuit()
 	if pl:KeyDown(IN_WALK) then
 		pl:ConCommand("-walk")
@@ -1314,6 +1379,7 @@ function GM:PlayerInitialSpawnRound(pl)
 	pl:SetCanZoom(false)
 	pl:SetNoCollideWithTeammates(true)
 	pl:SetCustomCollisionCheck(true)
+
 	pl:DoHulls()
 	pl.BloodDead = 0
 	pl.BountyModifier = 0
@@ -1329,6 +1395,7 @@ function GM:PlayerInitialSpawnRound(pl)
 	pl.WaveJoined = self:GetWave()
 
 	pl.FixForFix = 0
+	pl.NextDash = 0
 	
 	pl.BloodRegen = 0
 	pl.BarricadeDamage = 0
@@ -1341,6 +1408,7 @@ function GM:PlayerInitialSpawnRound(pl)
 	pl.LastLegDamageThink = 0
 
 	pl.BadTimeTime = 0
+	pl.NextGEUse = 0
 	
 	pl.DamageDealt = 0
 	pl.TimeCapping = 0
@@ -1372,8 +1440,12 @@ function GM:PlayerInitialSpawnRound(pl)
 	pl.DeepFocuses = nil
 	pl.DeepFocus_Time = 0
 	pl.StaminaUsed = 0
+	pl.ColdUsed = 0
 	self:LoadVault(pl)
 	pl:ApplySkills()
+	if pl:IsSkillActive(SKILL_S_STAR_PLATINUM) then
+		pl:Give('weapon_zs_fists')
+	end
 
 	pl.SpawnedTime = CurTime()
 	if pl:GetInfo("zsb_spectator") == "1" then
@@ -1385,6 +1457,7 @@ function GM:PlayerInitialSpawnRound(pl)
 	end
 	
 	pl:SetPoints(0)
+	
 	pl:SetFullPoints(0)
 	if self.PreviousPoints[pl:SteamID64()] then
 		pl:AddPoints(self.PreviousPoints[pl:SteamID64()])
@@ -1423,14 +1496,14 @@ function GM:PlayerInitialSpawnRound(pl)
 		self.CurrentMapLoadedPlayers = self.CurrentMapLoadedPlayers + 1;
 	end
 
-	pl.ClassicModeInsuredWeps = {}
+	pl.ClassicModeInsuredWeps = self.WeaponSaveLol[pl:SteamID64()] or {}
 	pl.ClassicModeNextInsureWeps = {}
 	pl.ClassicModeRemoveInsureWeps = {}
 	pl:SendLua("GAMEMODE.ClassicModeInsuredWeps = {}")
 	pl:SendLua("GAMEMODE.ClassicModePurchasedThisWave = {}")
 	pl:ResetLoadout()
 	if not self:IsRoundModeUnassigned() then
-		if self:IsClassicMode() then
+		if self:IsClassicMode() and !self.WeaponSaveLol[pl:SteamID64()] then
 			table.ForceInsert(pl.ClassicModeInsuredWeps,pl:GetWeapon2())
 			table.ForceInsert(pl.ClassicModeInsuredWeps,pl:GetWeaponMelee())
 		end
@@ -1848,7 +1921,6 @@ end
 
 function GM:PlayerDeathThink(pl)
 	if self.RoundEnded then return end
-
 	if pl:GetObserverMode() == OBS_MODE_CHASE or pl:GetObserverMode() == OBS_MODE_IN_EYE then
 		local target = pl:GetObserverTarget()
 		if not target or not target:IsValid() or not target:IsPlayer() then
@@ -2298,12 +2370,13 @@ function GM:KeyPress(pl, key)
 		end
 	end
 	if key == IN_RELOAD then
-		if (pl:Team() == TEAM_HUMAN or pl:Team() == TEAM_BANDIT) and pl:Alive() and pl:IsSkillActive(SKILL_S_STICKY_FINGERS) and pl:KeyDown(IN_SPEED) and pl.NextUseSF <= CurTime() then
+		if (pl:Team() == TEAM_HUMAN or pl:Team() == TEAM_BANDIT) and pl:Alive() and pl:IsSkillActive(SKILL_S_STICKY_FINGERS) and pl:KeyDown(IN_SPEED) and pl.NextUseSF <= CurTime() and !pl:IsSkillActive(SKILL_S_STAR_PLATINUM) then
 			local p = pl:GetEyeTrace().Normal * (250 + (pl:IsSkillActive(SKILL_S_STICKY_FINGERS_B1) and 100 or 0))
 			p.z = 0
 			p.y = p.y * (pl:IsSkillActive(SKILL_S_STICKY_FINGERS_B1) and math.random(-2,2) or 1)
 			p.x = p.x * (pl:IsSkillActive(SKILL_S_STICKY_FINGERS_B1) and math.random(-2,2) or 1)
 			pl:SetPos(pl:GetPos()+p)
+			pl:SetNWFloat("sticky_cd", CurTime() + 2)
 			pl.NextUseSF = CurTime() + 2
 		end
 	end
@@ -2317,14 +2390,16 @@ function GM:KeyPress(pl, key)
 		end
 		if pl:KeyDown(IN_RELOAD) and pl:IsSkillActive(SKILL_DEEPFOCUS) then
 			if (pl:Team() == TEAM_HUMAN or pl:Team() == TEAM_BANDIT) and pl:Alive() and pl.DeepFocus_Time <= CurTime() then
-				pl.DeepFocus_Time = CurTime() + 25
+				pl:SetNWFloat("deepfocus_cd", CurTime() + 15)
+				pl.DeepFocus_Time = CurTime() + 15
 				pl.DeepFocuses = true
 				pl:UpdateFocus(true)
 				pl:Fire( "alpha", 0, 0 )
+				pl:RemoveAllDecals()
 				pl:ResetSpeed()
 				pl:DrawWorldModel( false )
 				pl:DrawShadow( false )
-				timer.Simple(6, function()
+				timer.Simple(7, function()
 					pl.DeepFocuses = false
 					pl:UpdateFocus(false)
 					pl:ResetSpeed()
@@ -2335,6 +2410,15 @@ function GM:KeyPress(pl, key)
 		end
 	elseif key == IN_SPEED then
 		--pl:ResetSpeed()
+		if not pl:IsCarrying() and pl.NextDash < CurTime() and pl:IsSkillActive(SKILL_WONDERFUL) and !pl:GetBarricadeGhosting() and !pl:KeyDown(IN_RELOAD) and pl:GetWalkSpeed() > 150 then
+			if pl:GetStamina() < 13 then return end
+			local pos = pl:GetPos()
+			local pushvel = pl:GetEyeTrace().Normal * 0 + (pl:GetAngles():Forward()*(pl:OnGround() and 900 or 300))
+			pl:SetVelocity(pushvel)
+			pl:SetNWFloat("dash_cd", CurTime() + 3)
+			pl.NextDash = CurTime() + 3
+			pl:AddStamina(-13)
+		end 
 		if pl:Alive() then
 			if (pl:Team() == TEAM_HUMAN or pl:Team() == TEAM_BANDIT) then
 				pl:DispatchAltUse()
@@ -2353,6 +2437,7 @@ function GM:KeyPress(pl, key)
 		end
 	elseif key == IN_ZOOM and pl:IsSkillActive(SKILL_STARDUST) then
 		if (pl:Team() == TEAM_HUMAN or pl:Team() == TEAM_BANDIT) and pl:Alive() and pl.NextStarC <= CurTime() then
+			pl:SetNWFloat("star_cd", CurTime() + 2)
 			pl.NextStarC = CurTime() + 2
 			pl:EmitSound("npc/env_headcrabcanister/incoming.wav")
 			local effectdata = EffectData()
@@ -2428,6 +2513,8 @@ end
 
 function GM:PlayerDeath(pl, inflictor, attacker)
 	self:SaveVault(pl)
+	pl:SetCold(0)
+	pl:SetStamina(100)
 	if pl:IsSkillActive(SKILL_KAMIKAZE) then
 		util.BlastDamage2(pl, pl, pl:GetPos(), 256, 310)
 		pl:EmitSound("c4.explode")
@@ -2547,7 +2634,7 @@ function GM:PlayerKilledEnemy(pl, attacker, inflictor, dmginfo, headshot, suicid
 		attacker.BountyModifier = attacker.BountyModifier + 2
 	end
 	if pl:GetDOAMan() then
-		attacker.m_PointQueue = attacker.m_PointQueue + 90
+		attacker.m_PointQueue = attacker.m_PointQueue + GAMEMODE:GetWave()*20
 	end
 	if mostdamager then
 		attacker:PointCashOut(pl, FM_LOCALKILLOTHERASSIST)
@@ -2792,6 +2879,7 @@ function GM:PlayerSpawn(pl)
 		pl:SetMaterial("")
 	end
 	pl:UnSpectate()
+	pl:RemoveFlags(FL_ONGROUND) 
 
 	pl.StartSpectating = nil
 	pl.Gibbed = nil
@@ -2851,6 +2939,10 @@ function GM:PlayerSpawn(pl)
 		pl:SetNoTarget(false)
 		pl.SkillUsed = false
 		pl:ApplySkills()
+		pl:SendLua(' if MySelf:IsValid() then MySelf:ApplySkills() end')
+		if pl:IsSkillActive(SKILL_S_STAR_PLATINUM) then
+			pl:Give('weapon_zs_fists')
+		end
 		local current = pl:GetMaxHealth()
 		local new = 100 + math.Clamp(pl.HealthForADR - 100, -99, 1000)
 		pl:SetMaxHealth(new)
@@ -2880,6 +2972,7 @@ function GM:PlayerSpawn(pl)
 						end
 					end
 				end
+				self.WeaponSaveLol[pl:SteamID64()] = pl.ClassicModeInsuredWeps
 			else
 				pl:UpdateWeaponLoadouts()
 				if not self.SuddenDeath then
@@ -2897,6 +2990,7 @@ function GM:WaveStarted()
 	local players = player.GetAllActive()
 	for _, pl in pairs(players) do
 		pl:ApplySkills()
+		pl:SendLua(' if MySelf:IsValid() then MySelf:ApplySkills() end')
 		pl:GodDisable()
 		if not pl:Alive() then
 			local teamspawns = {}
@@ -3078,24 +3172,26 @@ function GM:WaveEnded()
 	local deployables = ents.FindByClass("prop_drone")
 	table.Add(deployables, ents.FindByClass("prop_manhack*"))
 	table.Add(deployables, ents.FindByClass("prop_gunturret"))
+	table.Add(deployables, ents.FindByClass("prop_laser_turret"))
+	table.Add(deployables, ents.FindByClass("prop_mortar"))
 	table.Add(deployables, ents.FindByClass("prop_detpack"))
 	for _, ent in pairs(deployables) do
-		if ent.GetOwner and ent:GetOwner():IsPlayer() and (ent:GetOwner():Team() == TEAM_BANDIT or ent:GetOwner():Team() == TEAM_HUMAN) then
-			ent:OnPackedUp(ent:GetOwner())
+		local owner = ent.GetOwner and ent:GetOwner():IsValid() and ent:GetOwner():IsPlayer() and ent:GetOwner() or ent.GetObjectOwner and ent:GetObjectOwner():IsValid() and ent:GetObjectOwner():IsPlayer() and ent:GetObjectOwner()
+		if owner and (owner:Team() == TEAM_BANDIT or owner:Team() == TEAM_HUMAN) then
+			ent:OnPackedUp(owner)
 		else
 			ent:Remove()
 		end
 	end
 	timer.Simple(1, function() self:SetCurrentWaveWinner(nil) end)
 end
-
+local specialwaves = {"1hp", "anubis", "bhop", "aos", "doa", "old", 'coldera', "urmteam", "palka"}
 function GM:ActivateSpecialWave(force)
 	local wave = ""
 	if force then
 		wave = force or "1hp"
 	end
 	if wave == nil or wave == "" then
-		local specialwaves = {"1hp", "anubis", "bhop", "aos", "doa", "old"}
 		wave = table.Random(specialwaves)
 	end
 	
@@ -3105,17 +3201,17 @@ function GM:ActivateSpecialWave(force)
 	self.SpecialWave = wave
 	if wave == "1hp" then
 		timer.Simple(0.5, function() for _, pl in pairs(player.GetAll()) do if pl:IsValid() then pl:SetHealth(1) end end end)
-	end
-	if wave == "old" then
-		timer.Simple(2.5, function() for _, pl in pairs(player.GetAll()) do if pl:IsValid() then pl:ApplySkills({}) end end end)
-	end
-	if wave == "doa" then
+	elseif wave == "old" then
+		timer.Simple(2.5, function() for _, pl in pairs(player.GetAll()) do if pl:IsValid() then pl:ApplySkills({}) pl:SendLua('MySelf:ApplySkills()') end end end)
+	elseif wave == "urmteam" then
+		local randmodel = player.GetAll()[math.random(1,#player.GetAll())]:GetModel()
+		timer.Simple(.5, function() for _, pl in pairs(player.GetAll()) do if pl:IsValid() then pl:SetModel(randmodel) pl:SetColor(COLOR_RED) 	pl:SetNoCollideWithTeammates(false) end end end)
+	elseif wave == "doa" then
 		local bdoa = table.Random(team.GetPlayers(TEAM_BANDIT))
 		local hdoa = table.Random(team.GetPlayers(TEAM_HUMAN))
 		bdoa:SetDOAMan(true)
 		hdoa:SetDOAMan(true)
-	end
-	if wave == "aos" then
+	elseif wave == "aos" then
 		timer.Simple(0.5, function() 
 			for _, pl in pairs(player.GetAll()) do
 				if pl:IsValid() then
@@ -3126,11 +3222,22 @@ function GM:ActivateSpecialWave(force)
 				end
 			end
 		end)
+	elseif wave == "palka" then
+		timer.Simple(0.5, function() 
+			for _, pl in pairs(player.GetAll()) do
+				if pl:IsValid() then
+					pl:Give('weapon_zs_palka')
+				end
+			end
+		end)
+		gamemode.Call("SetWaveStart", CurTime()+60)
+		GAMEMODE:SetWave(GAMEMODE:GetWave()-1)
+		SetGlobalBool("waveactive", false)
 	end
 end
 function GM:WaveStateChanged(newstate)
 	if newstate then
-		if math.random(1,self.ChanceForSpecialWave) == 1 then
+		if math.random(1,100) <= self.ChanceForSpecialWave then
 			self:ActivateSpecialWave()
 		end
 		gamemode.Call("WaveStarted")	
@@ -3143,6 +3250,8 @@ function GM:WaveStateChanged(newstate)
 					pl:SetViewOffsetDucked(DEFAULT_VIEW_OFFSET_DUCKED)
 					pl:ResetSpeed()
 					pl:SetDOAMan(false)
+					pl:SendLua('GAMEMODE.SpecialWave = ""')
+					pl:StripWeapon('weapon_zs_palka')
 				end
 			end)
 		end
@@ -3166,3 +3275,23 @@ end
 function GM:PlayerStepSoundTime(pl, iType, bWalking)
 	return 350
 end
+net.Receive("zs_stand_become", function(length, pl)
+	if !GAMEMODE:GetWaveActive()  then
+		local user = net.ReadEntity()
+		if user:IsValid() and user:IsPlayer() and user ~= pl and !user:IsSkillActive(SKILL_2_LIFE) and pl:IsSkillActive(SKILL_2_LIFE) and (pl.NextUserChange or 0) < CurTime() then
+			pl:SetStandUser(user)
+			user:CenterNotify({killicon = "default"}, {font = "ZSHUDFont"}, " ", team.GetColor(pl:Team()), translate.ClientGet(user,"ur_stand"), pl,{killicon = "default"})
+			pl:CenterNotify({killicon = "default"}, {font = "ZSHUDFont"}, " ", team.GetColor(user:Team()), translate.ClientGet(pl,"ur_user"), user,{killicon = "default"})
+			pl.NextUserChange = CurTime() + 5
+		end
+	end
+end)
+net.Receive("zs_fix_spec", function(length, pl)
+	pl:SetPoints(0)
+end)
+net.Receive("zs_ability_weapon", function(len, sender)
+	local ent = net.ReadEntity()
+	if ent and ent:IsValid() and ent.HaveAbility and ent == sender:GetActiveWeapon() then
+		ent:HaveAbility()
+	end
+end)

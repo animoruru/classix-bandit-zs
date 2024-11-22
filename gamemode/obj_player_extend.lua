@@ -140,12 +140,14 @@ end
 
 function meta:ApplyAdrenaline()
 	self.HumanSpeedAdder = (self.HumanSpeedAdder or 0) +5
+	self.AdrenalineNoUse = CurTime() + 8
 	self:ResetSpeed() 
 	if SERVER then 
-		self:SetBloodArmor(self:GetBloodArmor() + 15)
 		self.HealthDead = (self.HealthDead or 0) + 10
 		self:SetMaxHealth(self.HealthForADR-self.HealthDead)
-		self:SetHealth(math.min(self:GetMaxHealth() * 0.3 + self:Health(), self:GetMaxHealth()))
+		if self:IsSkillActive(SKILL_ADRENALINE_HP) and  GAMEMODE:GetSpecialWave() ~= "1hp"  then
+			self:SetHealth(math.min(self:GetMaxHealth() * 0.1 + self:Health(), self:GetMaxHealth()))
+		end
 	end
 	self:EmitSound("player/suit_sprint.wav")	
 	return true
@@ -153,7 +155,7 @@ end
 
 function meta:WearBodyArmor()
 	self:ResetSpeed() 
-	self:SetBodyArmor((self:GetBodyArmor() or 0)+100 - self:GetBloodArmor())
+	self:SetBodyArmor(100 - self:GetBloodArmor())
 	self:EmitSound("npc/combine_soldier/gear"..math.random(6)..".wav")
 	return true
 end
@@ -191,18 +193,35 @@ function meta:GetBleedDamage()
 	return self.Bleed and self.Bleed:IsValid() and self.Bleed:GetDamage() or 0
 end
 
-function meta:HealHealth(toheal,healer, wep)
+function meta:HealHealth(toheal,healer, wep, ignorebio)
 	if GAMEMODE:GetSpecialWave() == "1hp" then return end
 	local oldhealth = self:Health()
 	local newhealth = math.min(self:GetMaxHealth(),oldhealth + toheal)
+	if self:IsSkillActive(SKILL_SUPER_BIO) and !ignorebio then
+		print(math.Clamp(toheal/4,1,10))
+		for i=1,math.Round(math.Clamp(toheal/4,1,10)) do
+			timer.Simple(4/i, function() self:HealHealth(math.Round(toheal/4), healer, wep, true) end)
+		end
+		return
+	end
 	self:SetHealth(newhealth)
 	if SERVER and toheal >= 5 then
 		self:PurgeStatusEffects()
 	end
-	if healer:IsPlayer() and self ~= healer and healer:IsSkillActive(SKILL_S_CINDERELA) then
-		self:GiveStatus("c_debuff",1)
-		local g = self:GiveStatus("c_buff",(healer:IsSkillActive(SKILL_S_CINDERELA_B1) and 10 or 30))
-		g.Applier = healer
+	if healer:IsPlayer() and self ~= healer and healer:IsSkillActive(SKILL_S_CINDERELA) and self:GetMaxHealth() ~= oldhealth	then
+		self:GiveStatus("c_debuff",0.01)
+		local bruhich = healer:GetDTEntity(5)
+		local buff = toheal or 1
+		if bruhich:IsValid() then
+			buff = bruhich:GetStatus('c_buff') and  bruhich:GetStatus('c_buff'):IsValid() and bruhich:GetStatus('c_buff'):GetDTFloat(12) + buff
+			bruhich:GiveStatus('c_buff',0.01)
+		end
+		healer:SetDTEntity(5,self)
+		local g = self:GiveStatus("c_buff",(healer:IsSkillActive(SKILL_S_CINDERELA_B2) and 9999 or healer:IsSkillActive(SKILL_S_CINDERELA_B1) and 10 or 30))
+		if g and g:IsValid() then
+			g:SetDTFloat(12,buff or 1)
+			g.Applier = healer
+		end
 	end
 	if healer:IsPlayer() and healer~=self and newhealth != oldhealth and healer:Team() == self:Team() then
 		gamemode.Call("PlayerHealedTeamMember", healer, self, newhealth - oldhealth, wep)
@@ -401,8 +420,7 @@ end
 
 function meta:SetSpeed(speed)
 	if not speed then speed = SPEED_NORMAL end
-	local add = (self:IsSkillActive(SKILL_NFV) and 160 or 60) * (self:IsSkillActive(SKILL_BAD_HP) and math.random(-25,150)/100 or 1)
-	local runspeed = self:GetStamina() > 0 and speed + add or speed
+	local runspeed = self:GetStamina() > 0 and speed + (self:IsSkillActive(SKILL_NFV) and 160 or 60) * (self:IsSkillActive(SKILL_BAD_HP) and math.random(-25,150)/100 or 1) or speed
 	if GAMEMODE:GetSpecialWave() == "old" then
 		runspeed = speed
 	end
@@ -410,6 +428,19 @@ function meta:SetSpeed(speed)
 	self:SetWalkSpeed(speed)
 	self:SetRunSpeed(runspeed)
 	self:SetMaxSpeed(runspeed)
+end
+function meta:SetCold(cold)
+	self:SetDTFloat(DT_PLAYER_FLOAT_COLD,cold)
+end
+function meta:GetCold()
+	return self:GetDTFloat(DT_PLAYER_FLOAT_COLD)
+end
+function meta:GetMaximumCold()
+	return self.MaximumCold or 85
+end
+function meta:AddCold(cold)
+    if CLIENT then return end
+	self:SetCold(math.Clamp(self:GetCold() + cold,0,self:GetMaximumCold()+5))
 end
 
 function meta:ResetSpeed(noset)
@@ -425,12 +456,15 @@ function meta:ResetSpeed(noset)
 	if not speed then
 		speed = wep.WalkSpeed or SPEED_NORMAL
 	end
-	
 	if self:GetBodyArmor() > 20 then
 		speed = speed - self:GetBodyArmor() / 2
 	end
 	if self.SkillSpeedAdd then
 		speed = speed + self.SkillSpeedAdd
+	end
+	local cold = self:GetCold()
+	if cold > 15 then
+		speed = speed - cold
 	end
 	
 	if self.HumanSpeedAdder and (self:Team() == TEAM_HUMAN or self:Team() == TEAM_BANDIT) and 32 < speed then
@@ -442,8 +476,13 @@ function meta:ResetSpeed(noset)
 	if self:IsSkillActive(SKILL_2_LIFE) then
 		speed = speed * 0.86
 	end
-	if self:GetStatus("c_buff") then
-		speed = speed * (self:GetStatus("c_buff").Applier and self:GetStatus("c_buff").Applier:IsSkillActive(SKILL_S_CINDERELA_B1) and 1.35 or 1.25)
+	local buff = self:GetStatus("c_buff")
+	if buff then
+		if buff.Applier and buff.Applier:IsValid() and buff.Applier:IsSkillActive(SKILL_S_CINDERELA_B2) and buff:GetDTInt(12) > 0 then
+			speed = speed * (1+buff:GetDTFloat(12)/625)
+		else
+			speed = speed * (buff.Applier and buff.Applier:IsSkillActive(SKILL_S_CINDERELA_B1) and 1.35 or 1.25)
+		end
 	end
 	if self:GetStatus("c_debuff") then
 		speed = speed * 0.65
@@ -524,7 +563,7 @@ end
 function meta:ShouldNotCollide(ent)
 	if ent:IsValid() then
 		if ent:IsPlayer() then
-			return self:Team() == ent:Team()
+			return self:Team() == ent:Team() and GAMEMODE:GetSpecialWave() ~= "urmteam"
 		end
 		return (self:Team() == TEAM_HUMAN or self:Team() == TEAM_BANDIT) and ent:GetPhysicsObject():IsValid() and ent:GetPhysicsObject():HasGameFlag(FVPHYSICS_PLAYER_HELD)
 	end

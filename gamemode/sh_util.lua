@@ -377,7 +377,28 @@ function util.BlastDamageEx(inflictor, attacker, epicenter, radius, damage, dama
 			local nearest = ent:NearestPoint(epicenter)
 			local ratio = 1
 			if nearest:Distance(epicenter) > radius/2 then
-				ratio = 0.5+0.5*math.Clamp((nearest:Distance(epicenter)-radius/2)/radius*2 ,0,1)
+				ratio = 0.4+0.6*math.Clamp((nearest:Distance(epicenter)-radius/2)/radius*2 ,0,1)
+			end
+			if TrueVisibleFilters(epicenter, nearest, inflictor, ent) then
+				ent:TakeSpecialDamage(ratio * damage, damagetype, attacker, inflictor, nearest)
+			end
+		end
+	end
+end
+function util.BlastDamageEx2(inflictor, attacker, epicenter, radius, damage, damagetype)
+	local filter = inflictor
+	for _, ent in pairs(ents.FindInSphere(epicenter, radius)) do
+		if ent and ent:IsValid() then
+			local nearest = ent:NearestPoint(epicenter)
+			local ratio = 1
+			if nearest:Distance(epicenter) > radius/2 then
+				ratio = 0.4+0.6*math.Clamp((nearest:Distance(epicenter)-radius/2)/radius*2 ,0,1)
+			end
+			if ent:IsPlayer() then
+				local burned = ent:GiveStatus('burn')
+				burned:AddTime(4*ratio)
+				burned.Damager = attacker
+				burned.Damage = 1
 			end
 			if TrueVisibleFilters(epicenter, nearest, inflictor, ent) then
 				ent:TakeSpecialDamage(ratio * damage, damagetype, attacker, inflictor, nearest)
@@ -390,8 +411,9 @@ function util.BlastDamage2(inflictor, attacker, epicenter, radius, damage)
 	util.BlastDamageEx(inflictor, attacker, epicenter, radius, damage, DMG_BLAST)
 end
 
-function util.BlastDamageShredding(inflictor, attacker, epicenter, radius, damage)
+function util.BlastDamageShredding(inflictor, attacker, epicenter, radius, damage, splash)
 	local filter = inflictor
+	splash = splash or 1
 	for _, ent in pairs(ents.FindInSphere(epicenter, radius)) do
 		if ent and ent:IsValid() then
 			local nearest = ent:NearestPoint(epicenter)
@@ -402,6 +424,7 @@ function util.BlastDamageShredding(inflictor, attacker, epicenter, radius, damag
 			if nearest:Distance(epicenter) > radius/2 then
 				ratio = 0.5+0.5*math.Clamp((nearest:Distance(epicenter)-radius/2)/radius*2 ,0,1)
 			end
+			damage = damage * splash
 			if TrueVisibleFilters(epicenter, nearest, inflictor, ent) then
 				ent:TakeSpecialDamage(ratio * damage, DMG_BLAST, attacker, inflictor, nearest)
 			end
@@ -667,7 +690,7 @@ function util.Blood(pos, amount, dir, force, noprediction)
 end
 
 function util.BlastDamagePlayer(inf, att, center, radius, damage, damagetype, taperfactor)
-	if not att:IsValidPlayer() then ErrorNoHalt("[BlastDamagePlayer] Tried to use a nonplayer") end
+	if not (att:IsValid() and att:IsPlayer()) then ErrorNoHalt("[BlastDamagePlayer] Tried to use a nonplayer") end
 
 	util.BlastDamageEx(inf, att, center, radius * (att.ExpDamageRadiusMul or 1), damage * (att.ExplosiveDamageMul or 1), damagetype, taperfactor)
 end
@@ -946,3 +969,33 @@ function util.CreatePulseImpactEffect(hitpos, hitnormal)
 	pulseeffect:SetNormal(hitnormal)
 	util.Effect("cball_bounce", pulseeffect)
 end
+
+--Спасибо молочку и ноацессу
+local GetAll = player.GetAll
+local WorldSpaceAABB = FindMetaTable("Entity").WorldSpaceAABB
+local IsBoxIntersectingSphere = util.IsBoxIntersectingSphere
+
+function player.FindInSphere( origin, radius )
+
+    local ret = {}
+    local count = 1
+    local players = GetAll()
+
+    for i = 1, #players do
+
+        local pl = players[i]
+        local min, max = WorldSpaceAABB( pl )
+
+        if IsBoxIntersectingSphere( min, max, origin, radius ) then
+
+            ret[count] = pl
+            count = count + 1
+
+        end
+
+    end
+
+    return ret
+
+end
+

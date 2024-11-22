@@ -157,8 +157,23 @@ GM.Beats = {
 "music/HL1_song17.mp3",
 "music/HL1_song10.mp3"
 }
-
+function GM:BecomeStandOf(pl)
+	net.Start("zs_stand_become")
+		net.WriteEntity(pl)
+	net.SendToServer()
+end
 function GM:ClickedPlayerButton(pl, button)
+	surface.PlaySound("buttons/button15.wav")
+    local menu = DermaMenu(true)
+    menu:AddOption(pl:GetName(), function() end)
+    if not pl:IsBot() then
+        menu:AddOption("Профиль в стиме", function() pl:ShowProfile() end)
+    end
+    if pl:Team() == MySelf:Team() and pl ~= MySelf and MySelf:IsSkillActive(SKILL_2_LIFE) and !pl:IsSkillActive(SKILL_2_LIFE) and !self:GetWaveActive() and MySelf:GetStandUser() ~= pl then
+        menu:AddOption("Стать его стендом", function() timer.Simple(0, function() self:BecomeStandOf(pl) end) end)
+    end
+
+    menu:Open()
 end
 
 function GM:ClickedEndBoardPlayerButton(pl, button)
@@ -262,7 +277,7 @@ end
 function GM:OnReloaded()
 	self.BaseClass.OnReloaded(self)
 
-	self:LocalPlayerFound()
+	timer.Simple(0, function() self:LocalPlayerFound() end)--Таймер чтобы худ НОРМАЛЬНО ВЫГЛЯДЕЛ!!!
 end
 
 -- The whole point of this is so we don't need to check if the local player is valid 1000 times a second.
@@ -371,7 +386,7 @@ function GM:_Think()
 	end
 	local myteam = MySelf:Team()
 	self:PlayBeats()
-	if myteam == TEAM_HUMAN or myteam == TEAM_BANDIT then
+	if (myteam == TEAM_HUMAN or myteam == TEAM_BANDIT) and self:GetSpecialWave() ~= "urmteam" then
 		local wep = MySelf:GetActiveWeapon()
 		if wep:IsValid() and wep.GetIronsights and wep:GetIronsights() then
 			self.FOVLerp = math.Approach(self.FOVLerp, wep.IronsightsMultiplier or 0.6, FrameTime() * 4)
@@ -460,9 +475,7 @@ net.Receive( "zs_hitmarker", function( iLen )
 	GAMEMODE.LastHitMarkerHeadshot = head
 	LocalPlayer():EmitSound("bandit/hitsound.wav", 500, 100, 1,CHAN_ITEM)
 end )
-function GM:DrawStaminaBar()
-	local x = ScrW() * 0.45
-	local y = ScrH() * 0.78
+function GM:DrawStaminaBar(y)
 
 	local lp = MySelf
 
@@ -498,6 +511,52 @@ function GM:DrawStaminaBar()
 			surface.DrawTexturedRect(x + 2 + subwidth - 6, y + 1 - hei/2, 4, hei * 2)
 			local phantomwidth = (health == 100 and 0 or wid)
 			draw.SimpleTextBlurry(math.Round(lp:GetStamina()) , "ZSHUDFontSmall", x, y - 12, colHealth, TEXT_ALIGN_LEFT, TEXT_ALIGN_BOTTOM)
+
+		end
+		return y - ScrW() * 0.05
+	end
+	return y
+end
+
+function GM:DrawColdBar(x,y)
+
+	local lp = MySelf
+
+	if lp:GetCold() > 0 then
+		if lp:IsValid() then
+			local matGlow = Material("sprites/glow04_noz")
+			local texDownEdge = surface.GetTextureID("gui/gradient_down")
+			local colHealth = Color(0,216,216)
+			local coldMax = lp:GetMaximumCold()
+			local screenscale = BetterScreenScale()
+			local health = math.max(lp:GetCold(), 0)
+			local healthperc = math.Clamp(health / coldMax, 0.01, 1)
+			local wid, hei = 250 * screenscale, 30 * screenscale
+	 
+			colHealth.r = 55/healthperc
+			colHealth.g = 255 * healthperc
+			colHealth.b = 255 * healthperc
+	
+			local subwidth = healthperc * wid
+	
+			surface.SetDrawColor(0, 0, 0, 230)
+			surface.DrawRect(x, y, wid, hei)
+
+			
+	
+			surface.SetDrawColor(colHealth.r * 1, colHealth.g * 0.2, colHealth.b, 40)
+			surface.SetTexture(texDownEdge)
+			surface.DrawTexturedRect(x + 2, y + 1, subwidth - 4, hei - 2)
+			surface.SetDrawColor(colHealth.r * 0.6, colHealth.g * 0.6, colHealth.b, 30)
+			surface.DrawRect(x + 2, y + 1, subwidth - 4, hei - 2)
+	
+			surface.SetMaterial(matGlow)
+			surface.SetDrawColor(255, 255, 255, 255)
+			surface.DrawTexturedRect(x + 2 + subwidth - 6, y + 1 - hei/2, 4, hei * 2)
+			local phantomwidth = (coldMax == 100 and 0 or wid)
+			draw.SimpleTextBlurry(math.Round(lp:GetCold()) , "ZSHUDFontSmall", x, y - 12, colHealth, TEXT_ALIGN_LEFT, TEXT_ALIGN_BOTTOM)
+
+			draw.SimpleTextBlurry("ЗАМОРОЗКА", "ZSHUDFontSmall", wid + x, y+28, colHealth, TEXT_ALIGN_RIGHT, TEXT_ALIGN_BOTTOM)
 
 		end
 	end
@@ -580,7 +639,9 @@ function GM:HumanHUD(screenscale)
 		local y = ScrH() * 0.3
 		draw_SimpleTextBlur(translate.Get("waiting_for_next_wave"), "ZSHUDFont", x, y, COLOR_DARKRED, TEXT_ALIGN_CENTER)
 	end
-	self:DrawStaminaBar()
+	x,y = ScrW() * 0.45, ScrH() * 0.78
+	y = self:DrawStaminaBar(y)
+	self:DrawColdBar(x,y)
 end
 
 function GM:HUDPaint()
@@ -659,7 +720,7 @@ function GM:_PostDrawTranslucentRenderables()
 		self:DrawStarIndicators()
 		self:DrawNearestEnemy()
 	end
-	if self.ShowIndicators then
+	if self.ShowIndicators and self:GetSpecialWave() ~= "urmteam" then
 		local plys = team.GetPlayers(MySelf:Team())
 		local indicator_col = team.GetColor(MySelf:Team())
 		local dir = MySelf:GetForward() * -1
@@ -717,6 +778,8 @@ function GM:CreateFonts()
 	surface.CreateLegacyFont("csd", 42, 500, true, false, "healthsign", false, true)
 	surface.CreateLegacyFont("tahoma", 96, 1000, true, false, "zshintfont", false, true)
 
+	
+	surface.CreateLegacyFont(fontfamily3d, 24, fontweight3D, false, false,  "ZS3D2DFontSmallest", false, true, false, true)
 	surface.CreateLegacyFont(fontfamily3d, 48, fontweight3D, false, false,  "ZS3D2DFontSmall", false, true, false, true)
 	surface.CreateLegacyFont(fontfamily3d, 72, fontweight3D, false, false, "ZS3D2DFont", false, true, false, true)
 	surface.CreateLegacyFont(fontfamily3d, 128, fontweight3D, false, false, "ZS3D2DFontBig", false, true, false, true)
@@ -725,6 +788,7 @@ function GM:CreateFonts()
 	surface.CreateLegacyFont(fontfamily3d, 128, fontweight3D, false, false, "ZS3D2DFontBigBlur", false, false, 16, true)
 	surface.CreateLegacyFont(fontfamily, 40, fontweight3D, false, false,  "ZS3D2DFont2Smaller", false, true, false, true)
 	surface.CreateLegacyFont(fontfamily, 48, fontweight3D, false, false,  "ZS3D2DFont2Small", false, true, false, true)
+	surface.CreateLegacyFont(fontfamily, 48, fontweight3D, false, false,  "ZS3D2DFont2Smallest", false, true, false, true)
 	surface.CreateLegacyFont(fontfamily, 72, fontweight3D, false, false, "ZS3D2DFont2", false, true, false, true)
 	surface.CreateLegacyFont(fontfamily, 128, fontweight3D, false, false, "ZS3D2DFont2Big", false, true, false, true)
 	surface.CreateLegacyFont(fontfamily, 40, fontweight3D, false, false,  "ZS3D2DFont2SmallerBlur", false, false, 16, true)
@@ -868,8 +932,11 @@ end
 local texGradientDown = surface.GetTextureID("vgui/gradient_down")
 local texGradientRight = surface.GetTextureID("vgui/gradient-r")]]
 --local color_black = color_black
+
+
 local texCircle = surface.GetTextureID("effects/select_ring")
 local defaultcolor =  Color(255, 255, 255, 255)
+
 function GM:_HUDPaintBackground()
 	local wep = MySelf:GetActiveWeapon()
 	if wep:IsValid() and wep.DrawHUDBackground then
@@ -1021,7 +1088,15 @@ function GM:PlayerBindPress(pl, bind, wasin)
 	if bind == "gmod_undo" or bind == "undo" then
 		RunConsoleCommand("+zoom")
 		timer.CreateEx("ReleaseZoom", 1, 1, RunConsoleCommand, "-zoom")
-	end
+	elseif bind == "+menu" then
+		local wep =  pl:GetActiveWeapon()
+		if wep and wep.HaveAbility and !pl:KeyDown(IN_SPEED) then
+        	net.Start("zs_ability_weapon")
+			net.WriteEntity(wep)
+			net.SendToServer()
+			return
+		end
+    end
 end
 
 function GM:_ShouldDrawLocalPlayer(pl)
@@ -1189,7 +1264,24 @@ function GM:PreDrawViewModel(vm, pl, wep)
 		return wep:PreDrawViewModel(vm)
 	end
 end
-
+function GM:PreDrawHalos()
+	local marked = {}
+	for k,v in pairs(player.GetAll()) do
+		if v and v:IsValid() and v:Team() ~= MySelf:Team() and v:GetNWFloat("halotime_mark") > CurTime() then
+			marked[#marked+1] = v
+		end
+	end
+	if #marked == 0 then return end
+		halo.Add(
+			marked,
+			Color(255,0,0),
+			4,
+			4,
+			12,
+			true,
+			true
+		)
+end
 function GM:PostDrawViewModel(vm, pl, wep)
 	if wep and wep:IsValid() then
 		if wep.UseHands or not wep:IsScripted() then
@@ -1213,11 +1305,19 @@ function GM:_PrePlayerDraw(pl)
 	local shadowman = false
 	local myteam = MySelf:Team()
 	if myteam != pl:Team() and pl ~= MySelf and MySelf:Alive() and pl:Alive() and (pl:Team() == TEAM_BANDIT or pl:Team() == TEAM_HUMAN) then
+		
 		local wep = pl:GetActiveWeapon()
 		if pl:GetFocusD() then
 			render.SetBlend(0)
 			render.ModelMaterialOverride(matWhite)
 			render.SetColorModulation(0.067, 0.067, 0.067)
+		end
+		local cold = pl:GetCold()
+		if cold > 15 then
+			local mod = (cold/pl:GetMaximumCold())
+			render.SuppressEngineLighting(true)
+			render.ModelMaterialOverride(matWhite)
+			render.SetColorModulation(0.1, 0.1 * mod, 1*mod - math.abs(math.sin((CurTime() + pl:EntIndex()) * 3)) * 0.1)
 		end
 		if wep.m_IsStealthWeapon then
 			local blend = wep:GetStealthWepBlend()
@@ -1272,7 +1372,7 @@ function GM:_PostPlayerDraw(pl)
 	cam.IgnoreZ(false)
 	undomodelblend = false
 
-	if pl ~= MySelf and MySelf:Team() == pl:Team() and pl:IsFriend() then
+	if pl ~= MySelf and MySelf:Team() == pl:Team() and pl:IsFriend() and self:GetSpecialWave() ~= "urmteam" then
 		local pos = pl:GetPos() + Vector(0, 0, 2)
 		render.SetMaterial(matFriendRing)
 		render.DrawQuadEasy(pos, Vector(0, 0, 1), 32, 32, colFriend)
@@ -1381,7 +1481,7 @@ function GM:OnSpawnMenuOpen()
 	if (MySelf:Team() == TEAM_HUMAN or MySelf:Team() == TEAM_BANDIT) and not self:IsRoundModeUnassigned() then
 		if not self:IsClassicMode() then
 			gamemode.Call("HumanMenu")
-		elseif MySelf:Alive() then
+		elseif MySelf:Alive() and !MySelf:GetActiveWeapon().HaveAbility then
 			self:OpenPointsShop(WEAPONLOADOUT_NULL)
 		end
 	end
@@ -1693,6 +1793,7 @@ net.Receive("zs_special_wave", function(length)
 	local special = net.ReadString()
 	GAMEMODE:CenterNotify({killicon = "default"}, {font = "ZSHUDFont"}, " ", COLOR_RED, translate.Get("sp_"..special), {killicon = "default"})
 	GAMEMODE:CenterNotify({killicon = "default"}, " ", COLOR_RED, translate.Get("sp_d_"..special), {killicon = "default"})
+	GAMEMODE.SpecialWave = special
 end)
 
 net.Receive("zs_wavewonby", function(length)

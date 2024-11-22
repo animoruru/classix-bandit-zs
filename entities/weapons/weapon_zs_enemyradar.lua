@@ -59,8 +59,12 @@ end
 
 function SWEP:Think()
 	local mul = 1
-	if self:GetOwner():IsSkillActive(SKILL_AUTOSCAN) then
+	local owner = self:GetOwner()
+	if owner:IsSkillActive(SKILL_AUTOSCAN) then
 		mul = mul + 1.5
+	end
+	if owner:IsSkillActive(SKILL_FOLGA) then
+		return
 	end
 	if CLIENT and GAMEMODE:GetWaveActive() and self.LastScan + (self.ScanDelay * mul ) <= CurTime() then
 		self.targets = {}
@@ -68,7 +72,7 @@ function SWEP:Think()
 		local toscan = player.GetAllActive()
 		table.Add(toscan, ents.FindByClass("prop_obj_nest"))
 		for _, ent in pairs(toscan) do
-			if (ent:GetClass() == "prop_obj_nest") or (self:GetOwner():IsPlayer() and ent:IsPlayer() and ent:Team() ~= self:GetOwner():Team() and (ent:Team() == TEAM_HUMAN or ent:Team() == TEAM_BANDIT) and ent:Alive()) then 
+			if (ent:GetClass() == "prop_obj_nest") or (owner:IsPlayer() and ent:IsPlayer() and ent:Team() ~= owner:Team() and (ent:Team() == TEAM_HUMAN or ent:Team() == TEAM_BANDIT) and ent:Alive()) then 
 				table.insert(self.targets,ent:GetPos())
 				table.insert(self.targets1,	ent)
 			end
@@ -76,12 +80,21 @@ function SWEP:Think()
 		self.LastScan = CurTime()
 		surface.PlaySound("npc/combine_gunship/gunship_ping_search.wav")
 	end
-	if SERVER and GAMEMODE:GetWaveActive() and self.NextDamage <= CurTime() and self:GetOwner():IsSkillActive(SKILL_DANGER_RADIOWAVES) then
-		for _, ent in pairs(ents.FindInSphere(self:GetOwner():GetPos(), 250)) do
-			if WorldVisible(self:GetOwner():LocalToWorld(Vector(0, 0, 30)), ent:NearestPoint(self:GetOwner():LocalToWorld(Vector(0, 0, 30)))) then
-				if ent:IsValid() and ent:IsPlayer() and ent:Team() ~= self:GetOwner():Team() then
-					ent:TakeDamage(15, self:GetOwner(),self)
-					self:GetOwner():SetBloodArmor(math.min(100,self:GetOwner():GetBloodArmor() + 10))
+	local cold = owner:IsSkillActive(SKILL_COLD_REFUSION) 
+	if SERVER and GAMEMODE:GetWaveActive() and self.NextDamage <= CurTime() and owner:IsSkillActive(SKILL_DANGER_RADIOWAVES) then
+		for _, ent in pairs(ents.FindInSphere(owner:GetPos(), 250)) do
+			if WorldVisible(owner:LocalToWorld(Vector(0, 0, 30)), ent:NearestPoint(owner:LocalToWorld(Vector(0, 0, 30)))) then
+				if ent:IsValid() and ent:IsPlayer() and ent:Team() ~= owner:Team() and ent:Alive() then
+					if ent:IsSkillActive(SKILL_FOLGA) then
+						owner = ent
+					end
+					if cold then
+						ent:TakeDamage(1, owner,self)
+						ent:AddCold(15)
+					else
+						ent:TakeDamage(15, owner,self)
+						owner:SetBloodArmor(math.min(100,owner:GetBloodArmor() + 10))
+					end
 					self.NextDamage = CurTime() + 4.5
 				end
 			end
@@ -96,36 +109,36 @@ if not CLIENT then return end
 local texGradDown = surface.GetTextureID("VGUI/gradient_down")
 function SWEP:DrawHUD()
 	if GAMEMODE:GetWaveActive() then
-	for _, pos in pairs(self.targets) do
-		self:DrawTarget(pos,18,0)
-	end
-	for _, pos in pairs(self.targets1) do
-		for _, ent1 in pairs(ents.FindInSphere(self:GetOwner():GetPos(), 600)) do
-			if ent1 ~= self:GetOwner() and ent1:IsPlayer() then
-				self:DrawLowTgt(pos,18,0)
+		for _, pos in pairs(self.targets) do
+			self:DrawTarget(pos,18,0)
+		end
+		for _, pos in pairs(self.targets1) do
+			for _, ent1 in pairs(ents.FindInSphere(self:GetOwner():GetPos(), 600)) do
+				if ent1 ~= self:GetOwner() and ent1:IsPlayer() then
+					self:DrawLowTgt(pos,18,0)
+				end
 			end
 		end
-	end
-	local mul = 1
-	if self:GetOwner():IsSkillActive(SKILL_AUTOSCAN) then
-		mul = mul + 1.5
-	end
-	local scrW = ScrW()
-	local scrH = ScrH()
-	local width = 200
-	local height = 20
-	local x, y = ScrW() - width - 32, ScrH() - height - 72
-	local ratio = math.Clamp((CurTime() - self.LastScan) / self.ScanDelay / mul,0,1)
-	
-	surface.SetDrawColor(5, 5, 5, 180)
-	surface.DrawRect(x, y, width, height)
+		local mul = 1
+		if self:GetOwner():IsSkillActive(SKILL_AUTOSCAN) then
+			mul = mul + 1.5
+		end
+		local scrW = ScrW()
+		local scrH = ScrH()
+		local width = 200
+		local height = 20
+		local x, y = ScrW() - width - 32, ScrH() - height - 72
+		local ratio = math.Clamp((CurTime() - self.LastScan) / self.ScanDelay / mul,0,1)
+		
+		surface.SetDrawColor(5, 5, 5, 180)
+		surface.DrawRect(x, y, width, height)
 
-	surface.SetDrawColor(255, 0, 0, 180)
-	surface.SetTexture(texGradDown)
-	surface.DrawTexturedRect(x, y, width*ratio, height)
+		surface.SetDrawColor(255, 0, 0, 180)
+		surface.SetTexture(texGradDown)
+		surface.DrawTexturedRect(x, y, width*ratio, height)
 
-	surface.SetDrawColor(255, 0, 0, 180)
-	surface.DrawOutlinedRect(x - 1, y - 1, width + 2, height + 2)
+		surface.SetDrawColor(255, 0, 0, 180)
+		surface.DrawOutlinedRect(x - 1, y - 1, width + 2, height + 2)
 	end
 
 	if self.BaseClass.DrawHUD then

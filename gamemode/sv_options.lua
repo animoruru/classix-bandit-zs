@@ -185,3 +185,13 @@ GM.HonorableMentions[HM_BESTAIM].GetPlayer = function(self)
 		return pl, mag
 	end
 end
+
+local decaldelay = 0
+hook.Add( "Move", "RemoveStealthBlood", function( ply, mv )
+    if ( decaldelay > CurTime() ) then return end
+    local curwep = ply:GetActiveWeapon()
+    if ( !IsValid(curwep) ) then return end
+    if ( curwep.m_IsStealthWeapon ) then
+        ply:RemoveAllDecals()
+    end
+end)

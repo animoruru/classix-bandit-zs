@@ -202,7 +202,6 @@ function meta:DrawCrosshairCross()
 	local owner = self:GetOwner()
 
 	local cone = self:GetCone()
-
 	if cone <= 0 or ironsights and not ironsightscrosshair then return end
 
 	cone = ScrH() / 76.8 * cone
@@ -242,6 +241,44 @@ end
 function meta:DrawCrosshairDot()
 	local x = ScrW() * 0.5
 	local y = ScrH() * 0.5
+	local localx = x*1.95
+	local yadd = 0
+	local screen = BetterScreenScale()
+	if MySelf:IsSkillActive(SKILL_S_STICKY_FINGERS) then
+		local med = math.max(0,math.Round(MySelf:GetNWFloat("sticky_cd")-CurTime(),1))
+		draw.SimpleText("(R + SHIFT) Следующий ТП:"..med,"ZSHUDFontSmallest", localx, y+yadd*BetterScreenScale(), med == 0 and COLOR_GREEN or COLOR_RED, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+		yadd = yadd + 20 * screen
+	end
+	if MySelf:IsSkillActive(SKILL_WONDERFUL) then
+		local med = math.max(0,math.Round(MySelf:GetNWFloat("dash_cd")-CurTime(),1))
+		draw.SimpleText("(SHIFT) Следующий рывок:"..med,"ZSHUDFontSmallest", localx, y+yadd*BetterScreenScale(), med == 0 and COLOR_GREEN or COLOR_RED, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+		yadd = yadd + 20 * screen
+	end
+	if MySelf:IsSkillActive(SKILL_STARDUST) then
+		local med = math.max(0,math.Round(MySelf:GetNWFloat("star_upd")-CurTime(),1))
+		draw.SimpleText("Следующee сохранение позиции:"..med,"ZSHUDFontSmallest", localx, y+yadd*BetterScreenScale(), med == 0 and COLOR_GREEN or COLOR_RED, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+		yadd = yadd + 20 * screen
+	end
+	if MySelf:IsSkillActive(SKILL_STARDUST) then
+		local med = math.max(0,math.Round(MySelf:GetNWFloat("star_cd")-CurTime(),1))
+		draw.SimpleText("(B или "..(input.LookupBinding("+zoom") or "Z")..") Телепорт:"..med,"ZSHUDFontSmallest", localx, y+yadd*BetterScreenScale(), med == 0 and COLOR_GREEN or COLOR_RED, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+		yadd = yadd + 20 * screen
+	end
+	if MySelf:IsSkillActive(SKILL_DEEPFOCUS) then
+		local med = math.max(0,math.Round(MySelf:GetNWFloat("deepfocus_cd")-CurTime(),1))
+		draw.SimpleText("(E + R)Войти в фокус:"..med,"ZSHUDFontSmallest", localx, y+yadd*BetterScreenScale(), med == 0 and COLOR_GREEN or COLOR_RED, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+		yadd = yadd + 20 * screen
+		if med >= 8 then
+			draw.SimpleText("ГЛУБОКИЙ ФОКУС: "..med-8,"ZSHUDFontSmallest", localx, y+yadd*BetterScreenScale(),  COLOR_CYAN, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+			yadd = yadd + 20 * screen
+		end
+	end
+	local mich = MySelf:GetDTEntity(5)
+	if MySelf:IsSkillActive(SKILL_S_CINDERELA_B2) and mich:IsValid() and mich:GetStatus('c_buff') then
+		local med = mich:GetStatus('c_buff')
+		draw.SimpleText("Сила баффа:"..(math.Round(med:GetDTFloat(12)/625,3)*100).."%","ZSHUDFontSmallest", localx, y+yadd*BetterScreenScale(), COLOR_GREEN, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+		yadd = yadd + 20 * screen
+	end
 
 	surface.SetDrawColor(GAMEMODE.CrosshairColor2)
 	surface.DrawRect(x - 2, y - 2, 4, 4)
@@ -288,4 +325,60 @@ end
 
 function meta:HideViewModel()
 	self.GetViewModelPosition = NULLViewModelPosition
+end
+local texGradientU = Material("vgui/gradient-u")
+local texGradientD = Material("vgui/gradient-d")
+local texGradientR = Material("vgui/gradient-r")
+local surface_DrawTexturedRect = surface.DrawTexturedRect
+local surface_SetDrawColor = surface.SetDrawColor
+local surface_DrawRect = surface.DrawRect
+function meta:DrawFuturisticScope()
+	local scrw, scrh = ScrW(), ScrH()
+	local size = math.min(scrw, scrh)
+	local hw,hh = scrw * 0.5, scrh * 0.5
+	local screenscale = BetterScreenScale()
+	local gradsize = math.ceil(size * 0.14)
+	local line = 38 * screenscale
+
+	for i=0,6 do
+		local rectsize = math.floor(screenscale * 44) + i * math.floor(130 * screenscale)
+		local hrectsize = rectsize * 0.5
+		surface_SetDrawColor(0,145,255,math.max(35,25 + i * 30)/2)
+		surface.DrawOutlinedRect(hw-hrectsize,hh-hrectsize,rectsize,rectsize)
+	end
+	if scrw > size then
+		local extra = (scrw - size) * 0.5
+		for i=0,12 do
+			surface_SetDrawColor(0,145,255, math.max(10,255 - i * 21.25)/2)
+			surface.DrawLine(hw,i*line,hw,i*line+line)
+			surface.DrawLine(hw,scrh-i*line,hw,scrh-i*line-line)
+			surface.DrawLine(i*line+extra,hh,i*line+line+extra,hh)
+			surface.DrawLine(scrw-i*line-extra,hh,scrw-i*line-line-extra,hh)
+		end
+		surface_SetDrawColor(0, 0, 0, 255)
+		surface_DrawRect(0, 0, extra, scrh)
+		surface_DrawRect(scrw - extra, 0, extra, scrh)
+	end
+	if scrh > size then
+		local extra = (scrh - size) * 0.5
+		for i=0,12 do
+			surface_SetDrawColor(0,145,255, math.max(10,255 - i * 21.25)/2)
+			surface.DrawLine(hw,i*line+extra,hw,i*line+line+extra)
+			surface.DrawLine(hw,scrh-i*line-extra,hw,scrh-i*line-line-extra)
+			surface.DrawLine(i*line,hh,i*line+line,hh)
+			surface.DrawLine(scrw-i*line,hh,scrw-i*line-line,hh)
+		end
+		surface_SetDrawColor(0, 0, 0, 255)
+		surface_DrawRect(0, 0, scrw, extra)
+		surface_DrawRect(0, scrh - extra, scrw, extra)
+	end
+
+	surface.SetMaterial(texGradientU)
+	surface_SetDrawColor(0,0,0,255)
+	surface_DrawTexturedRect((scrw - size) * 0.5, (scrh - size) * 0.5, size, gradsize)
+	surface.SetMaterial(texGradientD)
+	surface_DrawTexturedRect((scrw - size) * 0.5, scrh - (scrh - size) * 0.5 - gradsize, size, gradsize)
+	surface.SetMaterial(texGradientR)
+	surface_DrawTexturedRect(scrw - (scrw - size) * 0.5 - gradsize, (scrh - size) * 0.5, gradsize, size)
+	surface.DrawTexturedRectRotated((scrw - size) * 0.5 + gradsize / 2, (scrh - size) * 0.5 + size / 2, gradsize, size, 180)
 end

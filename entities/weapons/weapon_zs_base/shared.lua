@@ -181,7 +181,7 @@ function SWEP:Reload()
 
 		self:GetOwner():DoReloadEvent()
 		self.IdleAnimation = CurTime() + self:SequenceDuration()
-		self:SetNextReload(self.IdleAnimation * self:GetOwner().ReloadSpeedMultiplier)
+		self:SetNextReload(self.IdleAnimation * (self:GetOwner().ReloadSpeedMultiplier or 1))
 		self:EmitReloadSound()
 	end
 end
@@ -320,6 +320,7 @@ function SWEP:Holster()
 end
 
 function SWEP:TakeAmmo()
+	if self:GetDTBool(12) then return end
 	self:TakePrimaryAmmo(self.RequiredClip)
 end
 
@@ -367,25 +368,6 @@ function GenericBulletCallback(attacker, tr, dmginfo)
 			attacker.ShotsHit = attacker.ShotsHit + 1
 		end
 		if ent:IsPlayer() then
-			if attacker:IsSkillActive(SKILL_R_BULLETS) then
-				local d = tr.Hit and tr.HitGroup == HITGROUP_HEAD
-				local power = (dmginfo:GetDamage() / 7) / (attacker:GetActiveWeapon() and attacker:GetActiveWeapon().Primary.NumShots or 1)
-				local conf = ent:GiveStatus("confusion",(d and power * 5 or power))
-			end
-			if attacker:IsSkillActive(SKILL_BIG_BOOM) and ent:GetActiveWeapon() and ent:GetActiveWeapon().IsMelee then
-				local pl = ent
-				timer.Create(ent:Nick().." Explode Ammo",1.2,1, function()
-					util.BlastDamage2(dmginfo:GetInflictor(), attacker, pl:GetPos(), 45, (pl:Health() or 1) * 0.1 + dmginfo:GetDamage())
-					pl:EmitSound("c4.explode")
-					local effectdata = EffectData()
-						effectdata:SetOrigin(pl:GetPos())
-					util.Effect("Explosion", effectdata)
-					if SERVER then
-						pl:TakeDamage((pl:Health() or 1) * 0.1, attacker,dmginfo:GetInflictor() )
-						pl:SetBloodArmor(0)
-					end
-				 end)
-			end
 			if attacker:IsPlayer() and ent:Team() ~= attacker:Team() and tempknockback then
 				tempknockback[ent] = ent:GetVelocity()
 			end
@@ -396,6 +378,7 @@ function GenericBulletCallback(attacker, tr, dmginfo)
 			end
 		end
 	end
+
 end
 
 function SWEP:SendWeaponAnimation()
@@ -631,7 +614,7 @@ function SWEP:ShootCSBullets(owner, dmg, numbul, cone, hit_own_team)
 	temp_shooter = self
 	temp_attacker = owner
 
-	bullet_trace.start = owner:GetShootPos()
+	bullet_trace.start = pos or owner:GetShootPos()
 	bullet_trace.filter = BaseBulletFilter
 	if not hit_own_team and owner:IsPlayer() then
 		temp_ignore_team = owner:Team()
@@ -696,24 +679,13 @@ function SWEP:ShootBullets(dmg, numbul, cone)
 		owner.LastShotWeapon = self:GetClass()
 	end
 	self:DoSelfKnockBack(1)
-	if owner:IsSkillActive(SKILL_CONC_DMG) then
-		if SERVER then
-			self:GetOwner():ViewPunch(Angle(math.Rand(-(dmg * numbul), 0), math.Rand(-(dmg * numbul), (dmg * numbul)), 0))
-		else
-			local curAng = self:GetOwner():EyeAngles()
-			curAng.pitch = curAng.pitch - math.Rand((dmg * numbul), 0)
-			curAng.yaw = curAng.yaw + math.Rand(-(dmg * numbul), (dmg * numbul))
-			curAng.Roll = 0
-			self:GetOwner():SetEyeAngles(curAng)
-		end
-	end
 	if GAMEMODE.ClientSideHitscan and !owner:IsBot() then
 		self:ShootCSBullets(owner, dmg, numbul, cone)
 	else
 		self:StartBulletKnockback()
 		if IsFirstTimePredicted() then
 			owner:FireBullets({Num = numbul, Src = owner:GetShootPos(), Dir = owner:GetAimVector(), Spread = Vector(cone, cone, 0), Tracer = 1, TracerName = self.TracerName, Force = dmg * 0.1, Damage = dmg, Callback = self.BulletCallback})
-			self:ShootCSBullets(owner, dmg, numbul, cone)
+			--self:ShootCSBullets(owner, dmg, numbul, cone)
 		end
 		self:DoBulletKnockback(self.Primary.KnockbackScale * 0.05)
 		self:EndBulletKnockback()
