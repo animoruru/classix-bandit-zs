@@ -20,7 +20,7 @@ function ENT:EntityTakeDamage(ent, dmginfo)
 	local attacker = dmginfo:GetAttacker()
 	local own = self:GetOwner()
 	if ent ~= own then return end
-	if (attacker:IsValid() and attacker:IsPlayer() and own:IsPlayer() and attacker:Team() == own:Team()) then return end
+	if (attacker:IsValid() and attacker:IsPlayer() and own:IsPlayer() and attacker:Team() == own:Team()) or math.abs(own:GetForward():Angle().yaw - attacker:GetForward():Angle().yaw) <= 120 then return end
 	if dmginfo:GetDamagePosition() then
 		self:SetDTVector(12,dmginfo:GetDamagePosition() )
 	end
@@ -30,6 +30,9 @@ function ENT:EntityTakeDamage(ent, dmginfo)
 		mul = mul * -1
 	end
 	local olddamage = dmginfo:GetDamage()
+	if own:GetActiveWeapon().OnParry then
+		own:GetActiveWeapon():OnParry(inflictor, attacker, dmginfo, mul)
+	end
 	dmginfo:SetDamage(olddamage*mul) 
 	own:AddStamina(math.Clamp(40/gd,0,100))
 	local inflictor = dmginfo:GetInflictor()
